@@ -1,0 +1,1466 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Marketplace Mass Stock & Price Synchronizer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Menggunakan Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Library SheetJS untuk membaca/menulis file Excel/CSV -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    /* Sleek Scrollbar */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 8px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; border: 2px solid #f1f5f9; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    
+    /* Animations & Utilities */
+    .file-loaded-shopee { border-color: #f97316 !important; background-color: #fff7ed !important; }
+    .file-loaded-tokped { border-color: #10b981 !important; background-color: #ecfdf5 !important; }
+    .file-loaded-stock { border-color: #3b82f6 !important; background-color: #eff6ff !important; }
+    .fade-in-up { animation: fadeInUp 0.5s ease-out forwards; }
+    .fade-in { animation: fadeIn 0.3s ease-out forwards; }
+    
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    /* Glass Header for Table */
+    .glass-header {
+      background: rgba(248, 250, 252, 0.85);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+
+    /* Toggle Switch Switcher */
+    .toggle-checkbox:checked {
+      right: 0;
+      border-color: #4f46e5; /* indigo-600 */
+    }
+    .toggle-checkbox:checked + .toggle-label {
+      background-color: #4f46e5; /* indigo-600 */
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-[conic-gradient(at_top_right,_var(--tw-gradient-stops))] from-slate-50 via-slate-100 to-slate-200 p-4 md:p-8 font-sans text-slate-800 selection:bg-indigo-100 selection:text-indigo-900 transition-colors duration-500" id="body-bg">
+  
+  <div class="max-w-[1400px] mx-auto flex flex-col xl:flex-row gap-6 relative">
+    
+    <!-- MAIN CONTENT (Kiri) -->
+    <div class="flex-1 space-y-6 min-w-0">
+      
+      <!-- Platform Selector Tabs -->
+      <div class="flex justify-center mb-2">
+        <div class="bg-white p-1.5 rounded-2xl shadow-sm border border-slate-200 inline-flex relative">
+          <button id="tab-shopee" class="relative z-10 px-8 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 text-white flex items-center shadow-md bg-gradient-to-r from-orange-400 to-orange-600" onclick="setPlatform('shopee')">
+            <i data-lucide="shopping-bag" class="w-4 h-4 mr-2"></i> Mode Shopee
+          </button>
+          <button id="tab-tokped" class="relative z-10 px-8 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 text-slate-500 hover:text-slate-700 flex items-center bg-transparent" onclick="setPlatform('tokopedia')">
+            <i data-lucide="store" class="w-4 h-4 mr-2"></i> Mode Tokopedia
+          </button>
+        </div>
+      </div>
+
+      <!-- Header -->
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-white/40 flex flex-col md:flex-row md:items-center gap-5 backdrop-blur-xl bg-white/80 transition-all hover:shadow-md">
+        <div id="header-icon-container" class="bg-gradient-to-br from-orange-400 to-orange-600 p-3.5 rounded-xl text-white shadow-lg shadow-orange-200 shrink-0 transform transition-all hover:scale-105 duration-500">
+          <i data-lucide="refresh-cw" class="w-7 h-7"></i>
+        </div>
+        <div>
+          <h1 class="text-2xl md:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-slate-800 to-slate-600 tracking-tight transition-colors duration-500">Mass Synchronizer Multi-Toko</h1>
+          <p class="text-slate-500 text-sm mt-1 font-medium" id="header-desc">Sinkronisasi Stok dan Harga untuk Balistationery & Gomall sekaligus.</p>
+        </div>
+      </div>
+
+      <!-- Upload Section -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Upload StockList (Master) -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col transition-all hover:shadow-md">
+          <h2 class="text-lg font-bold text-slate-800 mb-2 flex items-center">
+            <span class="w-6 h-6 rounded-md bg-gradient-to-br from-slate-700 to-slate-900 text-white text-xs flex items-center justify-center mr-3 shadow-sm shrink-0">1</span>
+            Acuan Master
+          </h2>
+          <p class="text-xs text-slate-500 mb-4 bg-slate-50 p-2 rounded-lg border border-slate-100" id="master-desc-text">
+            Membaca File Stok: SKU <strong>(Kol. 1)</strong>, Nama <strong>(Kol. 3)</strong>, Merk <strong>(Kol. 7)</strong>, Stok <strong>(Kol. 13)</strong>.
+          </p>
+          
+          <div 
+            id="drop-zone-stock"
+            class="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center transition-all duration-300 hover:bg-slate-50 hover:border-blue-400 cursor-pointer flex-1 flex flex-col items-center justify-center relative group"
+            onclick="document.getElementById('input-stock').click()"
+          >
+            <input type="file" id="input-stock" accept=".xlsx, .xls, .csv" class="hidden" />
+            <div class="p-3 bg-slate-50 rounded-full mb-3 group-hover:bg-blue-50 group-hover:scale-110 transition-all duration-300">
+              <i data-lucide="database" class="w-7 h-7 text-slate-400 group-hover:text-blue-500 transition-colors" id="icon-stock"></i>
+            </div>
+            <p class="text-sm font-semibold text-slate-700" id="text-stock">Pilih File Master</p>
+            <p class="text-xs text-blue-600 font-bold mt-2 bg-blue-100 px-3 py-1 rounded-full hidden" id="status-stock">0 Item SKU Dimuat</p>
+          </div>
+        </div>
+
+        <!-- Upload Target File (Toko 1: Balistationery) -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col transition-all hover:shadow-md">
+          <h2 class="text-lg font-bold text-slate-800 mb-2 flex items-center" id="target-title-1">
+            <span class="w-6 h-6 rounded-md bg-gradient-to-br from-orange-400 to-orange-600 text-white text-xs flex items-center justify-center mr-3 shadow-sm shadow-orange-200 transition-colors duration-500 shrink-0 id-target-num">2</span>
+            Toko 1
+          </h2>
+          <p class="text-xs text-slate-500 mb-4 bg-slate-50 p-2 rounded-lg border border-slate-100 transition-all duration-500 font-semibold text-indigo-700 text-center">
+            BALISTATIONERY
+          </p>
+          
+          <div 
+            id="drop-zone-target-1"
+            class="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center transition-all duration-300 hover:bg-slate-50 hover:border-orange-400 cursor-pointer flex-1 flex flex-col items-center justify-center relative group id-drop-zone-target"
+            onclick="document.getElementById('input-target-1').click()"
+          >
+            <input type="file" id="input-target-1" accept=".xlsx, .xls, .csv" class="hidden" />
+            <div id="target-icon-wrapper-1" class="p-3 bg-slate-50 rounded-full mb-3 group-hover:bg-orange-50 group-hover:scale-110 transition-all duration-300 id-target-icon-wrapper">
+              <i data-lucide="shopping-bag" class="w-7 h-7 text-slate-400 group-hover:text-orange-500 transition-colors id-icon-target" id="icon-target-1"></i>
+            </div>
+            <p class="text-sm font-semibold text-slate-700" id="text-target-1">Upload File Toko 1</p>
+            <p class="text-xs text-orange-600 font-bold mt-2 bg-orange-100 px-3 py-1 rounded-full hidden id-status-target" id="status-target-1">Siap diproses</p>
+          </div>
+        </div>
+
+        <!-- Upload Target File (Toko 2: Gomall) -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col transition-all hover:shadow-md">
+          <h2 class="text-lg font-bold text-slate-800 mb-2 flex items-center" id="target-title-2">
+            <span class="w-6 h-6 rounded-md bg-gradient-to-br from-orange-400 to-orange-600 text-white text-xs flex items-center justify-center mr-3 shadow-sm shadow-orange-200 transition-colors duration-500 shrink-0 id-target-num">3</span>
+            Toko 2
+          </h2>
+          <p class="text-xs text-slate-500 mb-4 bg-slate-50 p-2 rounded-lg border border-slate-100 transition-all duration-500 font-semibold text-purple-700 text-center">
+            GOMALL
+          </p>
+          
+          <div 
+            id="drop-zone-target-2"
+            class="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center transition-all duration-300 hover:bg-slate-50 hover:border-orange-400 cursor-pointer flex-1 flex flex-col items-center justify-center relative group id-drop-zone-target"
+            onclick="document.getElementById('input-target-2').click()"
+          >
+            <input type="file" id="input-target-2" accept=".xlsx, .xls, .csv" class="hidden" />
+            <div id="target-icon-wrapper-2" class="p-3 bg-slate-50 rounded-full mb-3 group-hover:bg-orange-50 group-hover:scale-110 transition-all duration-300 id-target-icon-wrapper">
+              <i data-lucide="shopping-bag" class="w-7 h-7 text-slate-400 group-hover:text-orange-500 transition-colors id-icon-target" id="icon-target-2"></i>
+            </div>
+            <p class="text-sm font-semibold text-slate-700" id="text-target-2">Upload File Toko 2</p>
+            <p class="text-xs text-orange-600 font-bold mt-2 bg-orange-100 px-3 py-1 rounded-full hidden id-status-target" id="status-target-2">Siap diproses</p>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Filter & Preview Action -->
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex flex-col gap-4 transition-all hover:shadow-md">
+        
+        <!-- Baris Filter Atas -->
+        <div class="flex flex-col md:flex-row items-start md:items-stretch gap-4 w-full">
+          
+          <!-- Mode Update (Stok / Harga) -->
+          <div class="flex flex-col w-full md:w-48 shrink-0">
+            <label class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Jenis Update:</label>
+            <div class="relative w-full h-[44px]">
+              <select id="mode-update" class="appearance-none bg-indigo-50 border-2 border-indigo-200 text-indigo-800 text-sm font-bold rounded-xl focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 block w-full h-full px-3 pr-10 transition-all outline-none cursor-pointer">
+                <option value="stok">🔄 Update Stok</option>
+                <option value="harga">💰 Update Harga</option>
+              </select>
+              <i data-lucide="chevron-down" class="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-indigo-400 pointer-events-none"></i>
+            </div>
+          </div>
+
+          <!-- Filter Kategori SKU -->
+          <div class="flex flex-col w-full md:w-56 shrink-0">
+            <label class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Menu Tipe SKU:</label>
+            <div class="relative w-full h-[44px]">
+              <select id="filter-kategori" disabled class="appearance-none bg-white border-2 border-slate-200 text-slate-800 text-sm font-bold rounded-xl focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 block w-full h-full px-3 pr-10 disabled:opacity-50 disabled:bg-slate-50 disabled:cursor-not-allowed transition-all outline-none">
+                <option value="ALL">Semua SKU</option>
+                <option value="REGULAR">Reguler (≤ 5 Digit)</option>
+                <option value="PAKET">SKU Paket (> 5 Digit)</option>
+              </select>
+              <i data-lucide="chevron-down" class="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></i>
+            </div>
+          </div>
+
+          <!-- Filter Merk -->
+          <div class="flex flex-col w-full md:w-48 shrink-0">
+            <label class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Filter Merk:</label>
+            <div class="relative w-full h-[44px]">
+              <select id="filter-merk" disabled class="appearance-none bg-white border-2 border-slate-200 text-slate-800 text-sm font-medium rounded-xl focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 block w-full h-full px-3 pr-10 disabled:opacity-50 disabled:bg-slate-50 disabled:cursor-not-allowed transition-all outline-none">
+                <option value="ALL">Semua Merk</option>
+              </select>
+              <i data-lucide="chevron-down" class="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></i>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Baris Filter Bawah -->
+        <div class="flex flex-col xl:flex-row items-end gap-4 w-full mt-2">
+          <!-- Filter SKU / Keyword Khusus -->
+          <div class="flex flex-col w-full flex-1 relative">
+            <label class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Cari & Pilih SKU / Kata Kunci (Nama):</label>
+            
+            <div class="relative w-full flex items-center min-h-[44px] bg-white border-2 border-slate-200 rounded-xl focus-within:ring-4 focus-within:ring-indigo-500/20 focus-within:border-indigo-500 transition-all p-1 flex-wrap gap-1" id="sku-input-container">
+              <input type="text" id="filter-sku" disabled placeholder="Ketik SKU atau Kata Kunci..." class="flex-1 min-w-[150px] text-slate-800 text-sm font-medium bg-transparent border-none focus:ring-0 outline-none px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
+            </div>
+
+            <!-- Autocomplete -->
+            <div id="sku-suggestions" class="hidden absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-slate-200 rounded-xl shadow-lg z-50 max-h-60 overflow-y-auto overflow-x-hidden"></div>
+          </div>
+
+          <button 
+            id="btn-preview"
+            disabled
+            class="w-full xl:w-auto px-8 h-[44px] bg-slate-300 text-slate-500 font-bold rounded-xl shadow-sm transition-all duration-200 flex items-center justify-center disabled:cursor-not-allowed hover:-translate-y-0.5 active:translate-y-0 shrink-0"
+          >
+            <i data-lucide="eye" class="w-5 h-5 mr-2"></i>
+            Pratinjau Data
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Peringatan SKU Paket (Hidden by default) -->
+      <div id="sku-warning-area" class="hidden fade-in-up">
+        <div class="bg-amber-50 border-l-4 border-amber-500 rounded-r-2xl p-5 shadow-sm">
+          <div class="flex items-start">
+            <i data-lucide="package-open" class="w-6 h-6 text-amber-500 mr-3 shrink-0 mt-0.5"></i>
+            <div class="flex-1">
+              <h3 class="text-sm font-bold text-amber-800 mb-1">Perhatian: Ditemukan SKU Paket / Varian (> 5 Digit)</h3>
+              <p class="text-sm text-amber-700 leading-relaxed">
+                Sistem mendeteksi SKU target yang merupakan variasi dari SKU acuan Anda (contoh: <code class="bg-amber-100 px-1 rounded font-mono text-amber-900">01520-5RIM</code>).
+                <br><strong class="text-amber-900 mt-1 inline-block">✨ Fitur Pintar Aktif:</strong> Jika update <b>Stok</b>, jumlah akan <b>dibagi</b> angka varian. Jika update <b>Harga</b>, jumlah akan otomatis <b>dikali</b> angka varian. Anda dapat memverifikasi hasilnya di tabel bawah.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Results Area (Hidden by default) -->
+      <div id="results-area" class="hidden space-y-6 fade-in-up">
+        
+        <!-- Preview Table Container -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden transition-all hover:shadow-md">
+          
+          <!-- Toolbars Atas Tabel -->
+          <div class="p-5 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-50/50">
+            <div class="w-full md:w-1/3 relative">
+              <input type="text" id="preview-search" placeholder="Cari SKU atau Nama di tabel ini..." class="w-full pl-10 pr-4 py-2.5 border-2 border-slate-200 rounded-xl text-sm focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all bg-white font-medium text-slate-700 placeholder:text-slate-400">
+              <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+            </div>
+            
+            <div class="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
+              <!-- Toggle: Tampilkan Hanya yang Terpilih -->
+              <div class="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border border-slate-200 shadow-sm w-full md:w-auto justify-between md:justify-start hover:border-indigo-200 transition-colors">
+                <span class="text-sm font-bold text-slate-600">Hanya Data Terpilih</span>
+                <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                    <input type="checkbox" id="toggle-selected-only" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer z-10 transition-all duration-300"/>
+                    <label for="toggle-selected-only" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-300 cursor-pointer transition-colors duration-300"></label>
+                </div>
+              </div>
+
+              <button 
+                id="btn-execute-prompt"
+                class="w-full md:w-auto px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-bold rounded-xl shadow-md shadow-emerald-200 transition-all duration-200 flex items-center justify-center hover:-translate-y-0.5 active:translate-y-0"
+              >
+                <i data-lucide="save" class="w-4 h-4 mr-2"></i>
+                Eksekusi Update
+              </button>
+            </div>
+          </div>
+
+          <!-- The Table -->
+          <div class="overflow-x-auto relative min-h-[300px]">
+            <table class="w-full text-left text-sm text-slate-600">
+              <thead class="text-slate-700 font-bold sticky top-0 z-20 glass-header shadow-sm">
+                <tr>
+                  <th class="px-5 py-4 w-14 text-center border-b border-slate-200">
+                    <input type="checkbox" id="check-all" title="Pilih Semua di Hasil Pencarian Saat Ini" class="w-4 h-4 text-indigo-600 bg-white border-slate-300 rounded focus:ring-indigo-500 focus:ring-2 cursor-pointer transition-colors">
+                  </th>
+                  <!-- FITUR BARU: Menampilkan asal file (Toko) -->
+                  <th class="px-5 py-4 border-b border-slate-200 bg-slate-50/50 text-center w-32">Toko Target</th>
+                  <th class="px-5 py-4 border-b border-slate-200">Nama Produk Target</th>
+                  <th class="px-5 py-4 text-center border-b border-slate-200">SKU</th>
+                  
+                  <th class="px-5 py-4 text-right border-b border-slate-200" id="th-val-lama">Nilai Lama</th>
+                  
+                  <!-- Header Nilai Baru (Bisa Di-Sort) -->
+                  <th class="px-5 py-4 text-right border-b border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors group select-none" onclick="toggleSortStock()">
+                    <div class="flex items-center justify-end gap-1.5">
+                      <span id="th-val-baru">Nilai Baru</span>
+                      <div class="flex flex-col text-[9px] text-slate-300 group-hover:text-indigo-500 transition-colors">
+                        <i data-lucide="chevron-up" class="-mb-1.5" id="icon-sort-up"></i>
+                        <i data-lucide="chevron-down" class="-mt-1.5" id="icon-sort-down"></i>
+                      </div>
+                    </div>
+                  </th>
+
+                  <th class="px-5 py-4 text-center border-b border-slate-200">Status Awal</th>
+                </tr>
+              </thead>
+              <tbody id="preview-table" class="divide-y divide-slate-100 bg-white">
+                <!-- Baris hasil dimasukkan di sini oleh JS -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Pagination Footer -->
+          <div class="p-4 border-t border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-50 text-sm">
+            <div class="flex items-center gap-3 w-full md:w-auto justify-center md:justify-start">
+              <span class="font-medium text-slate-500">Tampilkan:</span>
+              <select id="rows-per-page" class="bg-white border border-slate-200 text-slate-700 rounded-lg py-1.5 px-3 focus:ring-2 focus:ring-indigo-500 outline-none font-bold">
+                <option value="5">5 baris</option>
+                <option value="10" selected>10 baris</option>
+                <option value="20">20 baris</option>
+                <option value="50">50 baris</option>
+                <option value="100">100 baris</option>
+              </select>
+            </div>
+
+            <div class="font-medium text-slate-500 w-full md:w-auto text-center">
+              Menampilkan <span id="page-start" class="font-bold text-slate-800">0</span> - <span id="page-end" class="font-bold text-slate-800">0</span> dari <span id="page-total" class="font-bold text-slate-800">0</span> data
+            </div>
+
+            <div class="flex gap-2 w-full md:w-auto justify-center md:justify-end">
+              <button id="btn-prev-page" class="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg font-bold hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Back</button>
+              <button id="btn-next-page" class="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg font-bold hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Next</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Summary Cards (Hidden until execute) -->
+        <div id="final-summary" class="hidden fade-in-up">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center">
+              <div class="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Data Diproses</div>
+              <div class="text-3xl font-black text-slate-800" id="res-total">0</div>
+            </div>
+            <div class="bg-emerald-50 p-5 rounded-2xl shadow-sm border border-emerald-100 flex flex-col justify-center relative overflow-hidden">
+              <div class="absolute -right-4 -top-4 opacity-10"><i data-lucide="check-circle" class="w-24 h-24 text-emerald-500"></i></div>
+              <div class="text-emerald-600 text-xs font-bold uppercase tracking-wider mb-1 relative z-10">Sukses Diupdate</div>
+              <div class="text-3xl font-black text-emerald-700 relative z-10" id="res-updated">0</div>
+            </div>
+            <div class="bg-rose-50 p-5 rounded-2xl shadow-sm border border-rose-100 flex flex-col justify-center relative overflow-hidden">
+              <div class="absolute -right-4 -top-4 opacity-10"><i data-lucide="x-circle" class="w-24 h-24 text-rose-500"></i></div>
+              <div class="text-rose-600 text-xs font-bold uppercase tracking-wider mb-1 relative z-10">Dihapus (Tak Dipilih)</div>
+              <div class="text-3xl font-black text-rose-700 relative z-10" id="res-missing">0</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div> <!-- /MAIN CONTENT -->
+
+    <!-- SIDEBAR (Kanan) - Kalkulator -->
+    <div class="w-full xl:w-80 shrink-0">
+      <div class="sticky top-6 bg-white/90 backdrop-blur-xl rounded-2xl shadow-sm border border-slate-200/60 flex flex-col transition-all hover:shadow-md overflow-hidden" style="max-h: calc(100vh - 3rem);">
+        
+        <!-- Header -->
+        <div class="p-5 border-b border-slate-100 shrink-0 bg-white">
+            <h3 class="text-lg font-bold text-slate-800 flex items-center">
+              <div class="bg-indigo-100 text-indigo-600 p-1.5 rounded-lg mr-3">
+                <i data-lucide="calculator" class="w-5 h-5"></i>
+              </div>
+              Kalkulator
+            </h3>
+        </div>
+
+        <!-- Scrollable Body for Smaller Screens -->
+        <div class="p-5 overflow-y-auto flex-1 flex flex-col gap-4">
+            <!-- Calc Display -->
+            <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 text-right overflow-hidden shadow-inner flex flex-col justify-end shrink-0 min-h-[80px]">
+               <div id="calc-history" class="text-sm text-slate-400 font-mono min-h-[20px] mb-1 truncate"></div>
+               <div id="calc-display" class="text-3xl font-black text-white tracking-wider font-mono truncate">0</div>
+            </div>
+
+            <!-- Calc Buttons -->
+            <div class="grid grid-cols-4 gap-2 shrink-0">
+               <button class="bg-rose-100 hover:bg-rose-200 text-rose-600 font-bold h-12 rounded-xl transition-colors col-span-2 text-lg active:scale-95" onclick="calcAction('C')">C</button>
+               <button class="bg-slate-200 hover:bg-slate-300 text-slate-600 font-bold h-12 rounded-xl transition-colors flex justify-center items-center active:scale-95" onclick="calcAction('BACKSPACE')"><i data-lucide="delete" class="w-5 h-5"></i></button>
+               <button class="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-black h-12 rounded-xl transition-colors text-lg active:scale-95" onclick="calcAction('/')">÷</button>
+
+               <button class="bg-slate-50 hover:bg-slate-100 border border-slate-100 text-slate-700 font-bold h-12 rounded-xl transition-colors text-lg shadow-sm active:scale-95" onclick="calcAction('7')">7</button>
+               <button class="bg-slate-50 hover:bg-slate-100 border border-slate-100 text-slate-700 font-bold h-12 rounded-xl transition-colors text-lg shadow-sm active:scale-95" onclick="calcAction('8')">8</button>
+               <button class="bg-slate-50 hover:bg-slate-100 border border-slate-100 text-slate-700 font-bold h-12 rounded-xl transition-colors text-lg shadow-sm active:scale-95" onclick="calcAction('9')">9</button>
+               <button class="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-black h-12 rounded-xl transition-colors text-lg active:scale-95" onclick="calcAction('*')">×</button>
+
+               <button class="bg-slate-50 hover:bg-slate-100 border border-slate-100 text-slate-700 font-bold h-12 rounded-xl transition-colors text-lg shadow-sm active:scale-95" onclick="calcAction('4')">4</button>
+               <button class="bg-slate-50 hover:bg-slate-100 border border-slate-100 text-slate-700 font-bold h-12 rounded-xl transition-colors text-lg shadow-sm active:scale-95" onclick="calcAction('5')">5</button>
+               <button class="bg-slate-50 hover:bg-slate-100 border border-slate-100 text-slate-700 font-bold h-12 rounded-xl transition-colors text-lg shadow-sm active:scale-95" onclick="calcAction('6')">6</button>
+               <button class="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-black h-12 rounded-xl transition-colors text-lg active:scale-95" onclick="calcAction('-')">-</button>
+
+               <button class="bg-slate-50 hover:bg-slate-100 border border-slate-100 text-slate-700 font-bold h-12 rounded-xl transition-colors text-lg shadow-sm active:scale-95" onclick="calcAction('1')">1</button>
+               <button class="bg-slate-50 hover:bg-slate-100 border border-slate-100 text-slate-700 font-bold h-12 rounded-xl transition-colors text-lg shadow-sm active:scale-95" onclick="calcAction('2')">2</button>
+               <button class="bg-slate-50 hover:bg-slate-100 border border-slate-100 text-slate-700 font-bold h-12 rounded-xl transition-colors text-lg shadow-sm active:scale-95" onclick="calcAction('3')">3</button>
+               <button class="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-black h-12 rounded-xl transition-colors text-lg active:scale-95" onclick="calcAction('+')">+</button>
+
+               <button class="bg-slate-50 hover:bg-slate-100 border border-slate-100 text-slate-700 font-bold h-12 rounded-xl transition-colors col-span-2 text-lg shadow-sm active:scale-95" onclick="calcAction('0')">0</button>
+               <button class="bg-slate-50 hover:bg-slate-100 border border-slate-100 text-slate-700 font-bold h-12 rounded-xl transition-colors text-lg shadow-sm active:scale-95" onclick="calcAction('.')">.</button>
+               <button class="bg-emerald-500 hover:bg-emerald-600 text-white font-black h-12 rounded-xl transition-colors text-lg shadow-md shadow-emerald-200 active:scale-95" onclick="calcAction('=')">=</button>
+            </div>
+        </div>
+      </div>
+    </div> <!-- /SIDEBAR Kalkulator -->
+
+  </div> <!-- /Container Grid 2 Kolom -->
+
+  <!-- Modal Popup Ketik Nama File -->
+  <div id="modal-filename" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-900/60 backdrop-blur-sm transition-all fade-in">
+    <div class="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl transform transition-all fade-in-up m-4">
+      <div class="flex items-center mb-4">
+        <div class="bg-indigo-100 p-2 rounded-full mr-3 text-indigo-600">
+          <i data-lucide="file-spreadsheet" class="w-6 h-6"></i>
+        </div>
+        <h3 class="text-xl font-bold text-slate-800">Simpan File Excel Baru</h3>
+      </div>
+      <p class="text-sm text-slate-500 mb-4 leading-relaxed">Sistem akan mengekstrak file berdasarkan data yang Anda pilih dan nilai <span id="modal-type-text">stok</span> yang sudah Anda ubah. Sistem akan otomatis menambahkan nama Toko di akhir nama file (misal: <code class="bg-slate-100 text-indigo-600 px-1 rounded">..._balistationery.xlsx</code>).</p>
+      
+      <div class="mb-6">
+        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Awalan Nama File Download:</label>
+        <div class="relative">
+          <input type="text" id="input-filename" class="w-full px-3 py-3 bg-slate-50 border-2 border-slate-200 text-slate-800 font-medium rounded-xl focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" value="mass_update_terbaru">
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-3">
+        <button type="button" class="px-5 py-2.5 rounded-xl text-slate-600 font-bold hover:bg-slate-100 transition-colors" onclick="closeFilenameModal()">Batal</button>
+        <button type="button" id="btn-confirm-download" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold shadow-md shadow-indigo-200 transition-all flex items-center">
+          <i data-lucide="download" class="w-4 h-4 mr-2"></i> Eksekusi & Download
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    lucide.createIcons();
+
+    // --- STATE & CONFIG ---
+    let currentPlatform = 'shopee'; 
+    
+    const platformConfig = {
+      shopee: {
+        skuIdx1: 4,         // Kolom 5
+        skuIdx2: 5,         // Kolom 6
+        stokIdx: 8,         // Kolom 9
+        hargaIdx: 6,        // Kolom 7
+        namaIdx: 1,         // Kolom 2
+        headerRowIdx: 2,    // Baris ke-3 Header
+        themeColor: 'orange',
+        themeHex: '#f97316',
+        bgGradient: 'from-orange-400 to-orange-600'
+      },
+      tokopedia: {
+        skuIdx1: 3,         // Kolom 4
+        skuIdx2: 3,         // Kolom 4
+        stokIdx: 8,         // Kolom 9
+        hargaIdx: 7,        // Kolom 8
+        namaIdx: 1,         // Kolom 2
+        headerRowIdx: 2,    // Baris ke-4 Produk
+        themeColor: 'emerald',
+        themeHex: '#10b981',
+        bgGradient: 'from-emerald-400 to-emerald-600'
+      }
+    };
+
+    // Global Variables
+    let stockMap = new Map(); 
+    let targetStore1 = null; // { shop: 'Balistationery', workbook, rows, headersRowIdx, totalValidRowsTarget, fileObj }
+    let targetStore2 = null; // { shop: 'Gomall', ... }
+    let selectedSkusArray = []; 
+    
+    let currentPreviewData = []; 
+    let sortStockOrder = 'none'; 
+    
+    // Pagination State
+    let previewCurrentPage = 1;
+    let previewRowsPerPage = 10;
+    let previewSearchText = '';
+
+    // --- DOM Elements ---
+    const tabShopee = document.getElementById('tab-shopee');
+    const tabTokped = document.getElementById('tab-tokped');
+    const headerIconContainer = document.getElementById('header-icon-container');
+    
+    const inputStock = document.getElementById('input-stock');
+    const dropZoneStock = document.getElementById('drop-zone-stock');
+    
+    const modeUpdate = document.getElementById('mode-update');
+    const filterKategori = document.getElementById('filter-kategori');
+    const filterMerk = document.getElementById('filter-merk');
+    const filterSku = document.getElementById('filter-sku');
+    const skuSuggestionsBox = document.getElementById('sku-suggestions');
+    const skuInputContainer = document.getElementById('sku-input-container');
+    const btnPreview = document.getElementById('btn-preview');
+    const resultsArea = document.getElementById('results-area');
+    const skuWarningArea = document.getElementById('sku-warning-area');
+    const previewTable = document.getElementById('preview-table');
+    const checkAllBtn = document.getElementById('check-all');
+    const btnExecutePrompt = document.getElementById('btn-execute-prompt');
+    const finalSummary = document.getElementById('final-summary');
+    
+    const thValLama = document.getElementById('th-val-lama');
+    const thValBaru = document.getElementById('th-val-baru');
+    
+    const modalFilename = document.getElementById('modal-filename');
+    const inputFilename = document.getElementById('input-filename');
+    const btnConfirmDownload = document.getElementById('btn-confirm-download');
+    const toggleSelectedOnly = document.getElementById('toggle-selected-only');
+    const inputPreviewSearch = document.getElementById('preview-search');
+
+    // --- CALCULATOR LOGIC ---
+    let calcExpression = '';
+    const calcDisplay = document.getElementById('calc-display');
+    const calcHistory = document.getElementById('calc-history');
+
+    window.calcAction = function(action) {
+      if (action === 'C') {
+        calcExpression = '';
+        calcHistory.innerText = '';
+        calcDisplay.innerText = '0';
+      } else if (action === 'BACKSPACE') {
+        calcExpression = calcExpression.slice(0, -1);
+        calcDisplay.innerText = calcExpression || '0';
+      } else if (action === '=') {
+        try {
+          let evalExpr = calcExpression.replace(/×/g, '*').replace(/÷/g, '/');
+          if (/^[0-9+\-*/()..\s]+$/.test(evalExpr)) {
+            const result = new Function('return ' + evalExpr)();
+            calcHistory.innerText = calcExpression.replace(/\*/g, '×').replace(/\//g, '÷') + ' =';
+            calcExpression = Number.isInteger(result) ? String(result) : parseFloat(result.toFixed(4)).toString();
+            calcDisplay.innerText = calcExpression;
+          }
+        } catch(e) {
+          calcDisplay.innerText = 'Error';
+          setTimeout(() => {
+            calcExpression = '';
+            calcDisplay.innerText = '0';
+          }, 1500);
+        }
+      } else {
+        if (action === '*') action = '×';
+        if (action === '/') action = '÷';
+        calcExpression += action;
+        calcDisplay.innerText = calcExpression;
+      }
+    };
+
+    // --- Platform Switcher ---
+    window.setPlatform = function(platform) {
+      if(currentPlatform === platform) return;
+      currentPlatform = platform;
+      
+      // Reset Targets
+      targetStore1 = null;
+      targetStore2 = null;
+      document.getElementById('input-target-1').value = '';
+      document.getElementById('input-target-2').value = '';
+      
+      ['1', '2'].forEach(id => {
+          document.getElementById(`status-target-${id}`).classList.add('hidden');
+          document.getElementById(`drop-zone-target-${id}`).className = `border-2 border-dashed border-slate-300 rounded-xl p-6 text-center transition-all duration-300 hover:bg-slate-50 hover:border-orange-400 cursor-pointer flex-1 flex flex-col items-center justify-center relative group id-drop-zone-target`;
+          document.getElementById(`text-target-${id}`).innerText = `Upload File Toko ${id}`;
+          document.getElementById(`icon-target-${id}`).className = `w-7 h-7 text-slate-400 group-hover:text-orange-500 transition-colors id-icon-target`;
+          document.getElementById(`icon-target-${id}`).setAttribute('data-lucide', 'shopping-bag');
+      });
+
+      const isShopee = platform === 'shopee';
+      
+      tabShopee.className = isShopee 
+        ? "relative z-10 px-8 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 text-white flex items-center shadow-md bg-gradient-to-r from-orange-400 to-orange-600" 
+        : "relative z-10 px-8 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 text-slate-500 hover:text-slate-700 flex items-center bg-transparent";
+      
+      tabTokped.className = !isShopee 
+        ? "relative z-10 px-8 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 text-white flex items-center shadow-md bg-gradient-to-r from-emerald-400 to-emerald-600" 
+        : "relative z-10 px-8 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 text-slate-500 hover:text-slate-700 flex items-center bg-transparent";
+
+      if(isShopee) {
+        headerIconContainer.className = "bg-gradient-to-br from-orange-400 to-orange-600 p-3.5 rounded-xl text-white shadow-lg shadow-orange-200 shrink-0 transform transition-all hover:scale-105 duration-500";
+        ['1', '2'].forEach(id => {
+            document.getElementById(`target-title-${id}`).innerHTML = `<span class="w-6 h-6 rounded-md bg-gradient-to-br from-orange-400 to-orange-600 text-white text-xs flex items-center justify-center mr-3 shadow-sm shadow-orange-200 transition-colors duration-500 shrink-0 id-target-num">${parseInt(id)+1}</span> Toko ${id}`;
+            document.getElementById(`drop-zone-target-${id}`).classList.add('hover:border-orange-400');
+            document.getElementById(`icon-target-${id}`).classList.replace('group-hover:text-emerald-500', 'group-hover:text-orange-500');
+        });
+      } else {
+        headerIconContainer.className = "bg-gradient-to-br from-emerald-400 to-emerald-600 p-3.5 rounded-xl text-white shadow-lg shadow-emerald-200 shrink-0 transform transition-all hover:scale-105 duration-500";
+        ['1', '2'].forEach(id => {
+            document.getElementById(`target-title-${id}`).innerHTML = `<span class="w-6 h-6 rounded-md bg-gradient-to-br from-emerald-400 to-emerald-600 text-white text-xs flex items-center justify-center mr-3 shadow-sm shadow-emerald-200 transition-colors duration-500 shrink-0 id-target-num">${parseInt(id)+1}</span> Toko ${id}`;
+            document.getElementById(`drop-zone-target-${id}`).classList.replace('hover:border-orange-400', 'hover:border-emerald-400');
+            document.getElementById(`icon-target-${id}`).classList.replace('group-hover:text-orange-500', 'group-hover:text-emerald-500');
+        });
+      }
+      
+      lucide.createIcons();
+      
+      resultsArea.classList.add('hidden');
+      skuWarningArea.classList.add('hidden');
+      checkReady();
+    };
+
+    // --- Listener Perubahan Mode Update (Stok / Harga) ---
+    modeUpdate.addEventListener('change', (e) => {
+      const isHarga = e.target.value === 'harga';
+      const masterDesc = document.getElementById('master-desc-text');
+
+      if (isHarga) {
+        masterDesc.innerHTML = `Membaca File Harga: SKU <strong>(Kol. 2)</strong> dan Harga <strong>(Kol. 11)</strong>.`;
+      } else {
+        masterDesc.innerHTML = `Membaca File Stok: SKU <strong>(Kol. 1)</strong>, Nama <strong>(Kol. 3)</strong>, Merk <strong>(Kol. 7)</strong>, Stok <strong>(Kol. 13)</strong>.`;
+      }
+
+      if (stockMap.size > 0) {
+        stockMap.clear();
+        inputStock.value = '';
+        document.getElementById('status-stock').classList.add('hidden');
+        dropZoneStock.classList.remove('file-loaded-stock');
+        document.getElementById('icon-stock').setAttribute('data-lucide', 'database');
+        document.getElementById('icon-stock').classList.replace('text-blue-500', 'text-slate-400');
+        document.getElementById('text-stock').innerText = "Pilih File Master";
+        lucide.createIcons();
+        checkReady();
+        alert(`Mode update diubah menjadi ${isHarga ? 'Harga' : 'Stok'}. Silakan unggah ulang file Acuan Master yang sesuai.`);
+      }
+    });
+
+    // --- Utilitas ---
+    const readFileAsAoA = (file) => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, {type: 'array', cellDates: true, cellStyles: true}); 
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+            resolve({ workbook, rows });
+          } catch(err) {
+            reject(err);
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      });
+    };
+
+    // --- Handler: File StockList ---
+    inputStock.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      try {
+        const { rows } = await readFileAsAoA(file);
+        if(rows.length === 0) throw new Error("File Acuan Master kosong.");
+
+        stockMap.clear();
+        selectedSkusArray = [];
+        renderSkuChips();
+        let loadedItems = 0;
+        let uniqueMerks = new Set();
+        
+        const isHarga = modeUpdate.value === 'harga';
+        const mSkuIdx = isHarga ? 1 : 0;   
+        const mValIdx = isHarga ? 10 : 12; 
+        const mNameIdx = 2; 
+        const mMerkIdx = 6; 
+        
+        for (let i = 1; i < rows.length; i++) {
+          const row = rows[i];
+          if(!row || row.length <= Math.max(mSkuIdx, mValIdx)) continue;
+          
+          let codeVal = row[mSkuIdx];
+          let valData = row[mValIdx];
+          let nameVal = String(row[mNameIdx] || '').trim();
+          let merkVal = String(row[mMerkIdx] || '').trim();
+          if(!merkVal) merkVal = "TIDAK ADA MERK";
+
+          if(codeVal !== undefined && codeVal !== "" && valData !== undefined) {
+            let strCode = String(codeVal).trim();
+            let intCode = parseInt(strCode, 10);
+            
+            const itemData = { 
+                qty: isHarga ? 0 : (parseInt(valData) || 0), 
+                price: isHarga ? (parseFloat(valData) || 0) : 0,
+                merk: merkVal, 
+                name: nameVal 
+            };
+            
+            stockMap.set(strCode, itemData);
+            if(!isNaN(intCode)) stockMap.set(intCode.toString(), itemData);
+            
+            uniqueMerks.add(merkVal);
+            loadedItems++;
+          }
+        }
+
+        filterMerk.innerHTML = '<option value="ALL">Semua Merk</option>';
+        let sortedMerks = Array.from(uniqueMerks).sort();
+        sortedMerks.forEach(m => {
+          let opt = document.createElement('option');
+          opt.value = m;
+          opt.text = m;
+          filterMerk.appendChild(opt);
+        });
+
+        dropZoneStock.classList.add('file-loaded-stock');
+        document.getElementById('icon-stock').classList.replace('text-slate-400', 'text-blue-500');
+        document.getElementById('icon-stock').setAttribute('data-lucide', 'check-circle');
+        document.getElementById('text-stock').innerText = file.name;
+        document.getElementById('status-stock').innerText = `${loadedItems} SKU dimuat.`;
+        document.getElementById('status-stock').classList.remove('hidden');
+        lucide.createIcons();
+        checkReady();
+
+      } catch (err) {
+        alert(err.message);
+        e.target.value = '';
+      }
+    });
+
+    // --- Handler: File Target (Dinamis 2 Toko) ---
+    async function processTargetUpload(e, storeKey, shopName) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      try {
+        const data = await readFileAsAoA(file);
+        const workbook = data.workbook; 
+        const rows = data.rows;
+        
+        if(rows.length < 2) throw new Error("Format file tidak valid.");
+
+        let headersRowIdx = 2;
+        if (currentPlatform === 'shopee') {
+          headersRowIdx = rows.findIndex(row => 
+            row.some(cell => {
+              const str = String(cell).toLowerCase();
+              return str.includes('kode produk') || str === 'sku' || str.includes('nomor sku') || str === 'id produk';
+            })
+          );
+          if(headersRowIdx === -1) headersRowIdx = platformConfig.shopee.headerRowIdx;
+        } else {
+          headersRowIdx = platformConfig.tokopedia.headerRowIdx;
+        }
+
+        let validRowsTarget = 0;
+        for (let i = headersRowIdx + 1; i < rows.length; i++) {
+          let col0 = String(rows[i][0] || '').trim();
+          let skuCol = String(rows[i][platformConfig[currentPlatform].skuIdx1] || '').trim();
+          if(col0 !== '' || skuCol !== '') {
+            validRowsTarget++;
+          }
+        }
+
+        const storeData = {
+            shop: shopName,
+            workbook: workbook,
+            rows: rows,
+            headersRowIdx: headersRowIdx,
+            totalValidRowsTarget: validRowsTarget,
+            fileObj: file
+        };
+
+        if (storeKey === 1) targetStore1 = storeData;
+        if (storeKey === 2) targetStore2 = storeData;
+
+        const tc = platformConfig[currentPlatform].themeColor;
+        const dropZone = document.getElementById(`drop-zone-target-${storeKey}`);
+        dropZone.className = `border-2 border-dashed border-${tc}-500 rounded-xl p-6 text-center bg-${tc}-50 cursor-pointer flex-1 flex flex-col items-center justify-center relative group`;
+        
+        const iconTarget = document.getElementById(`icon-target-${storeKey}`);
+        iconTarget.classList.remove('text-slate-400');
+        iconTarget.classList.add(`text-${tc}-500`);
+        iconTarget.setAttribute('data-lucide', 'check-circle');
+        
+        document.getElementById(`text-target-${storeKey}`).innerText = file.name;
+        
+        const statusTarget = document.getElementById(`status-target-${storeKey}`);
+        statusTarget.innerText = `Siap (${validRowsTarget} baris)`;
+        statusTarget.classList.remove('hidden');
+        
+        lucide.createIcons();
+        checkReady();
+
+      } catch (err) {
+        alert(`Error pada file Toko ${storeKey}: ${err.message}`);
+        e.target.value = '';
+      }
+    }
+
+    document.getElementById('input-target-1').addEventListener('change', (e) => processTargetUpload(e, 1, 'balistationery'));
+    document.getElementById('input-target-2').addEventListener('change', (e) => processTargetUpload(e, 2, 'gomall'));
+
+    function checkReady() {
+      if (stockMap.size > 0 && (targetStore1 !== null || targetStore2 !== null)) {
+        filterKategori.disabled = false;
+        filterMerk.disabled = false;
+        filterSku.disabled = false;
+        btnPreview.disabled = false;
+        btnPreview.className = "w-full xl:w-auto px-8 h-[44px] mt-0 lg:mt-5 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 transition-all duration-200 flex items-center justify-center hover:-translate-y-0.5 active:translate-y-0 shrink-0";
+      } else {
+        filterKategori.disabled = true;
+        filterMerk.disabled = true;
+        filterSku.disabled = true;
+        btnPreview.disabled = true;
+        btnPreview.className = "w-full xl:w-auto px-8 h-[44px] mt-0 lg:mt-5 bg-slate-300 text-slate-500 font-bold rounded-xl shadow-sm transition-all duration-200 flex items-center justify-center disabled:cursor-not-allowed shrink-0";
+      }
+    }
+
+    // --- SKU SEARCH & AUTOCOMPLETE LOGIC ---
+    function renderSkuChips() {
+      const chips = skuInputContainer.querySelectorAll('.sku-chip');
+      chips.forEach(chip => chip.remove());
+
+      selectedSkusArray.forEach(sku => {
+        const chip = document.createElement('div');
+        chip.className = 'sku-chip flex items-center gap-1 bg-indigo-100 text-indigo-700 px-2 py-1 rounded-md text-xs font-bold border border-indigo-200 shadow-sm transition-all';
+        chip.innerHTML = `
+          <span>${sku}</span>
+          <button type="button" class="text-indigo-400 hover:text-indigo-800 transition-colors" onclick="removeSku('${sku}')">
+            <i data-lucide="x" class="w-3 h-3"></i>
+          </button>
+        `;
+        skuInputContainer.insertBefore(chip, filterSku);
+      });
+      lucide.createIcons();
+    }
+
+    window.removeSku = function(sku) {
+      selectedSkusArray = selectedSkusArray.filter(s => s !== sku);
+      renderSkuChips();
+    };
+
+    filterSku.addEventListener('input', (e) => {
+      const searchTerm = e.target.value.toLowerCase().trim();
+      const selectedMerkFilter = filterMerk.value;
+      const isHarga = modeUpdate.value === 'harga';
+      
+      if (searchTerm.length < 2) {
+        skuSuggestionsBox.classList.add('hidden');
+        return;
+      }
+
+      if (searchTerm.endsWith(',')) {
+        const newSku = searchTerm.slice(0, -1).trim();
+        if (newSku && !selectedSkusArray.includes(newSku)) {
+          selectedSkusArray.push(newSku);
+          renderSkuChips();
+        }
+        filterSku.value = '';
+        skuSuggestionsBox.classList.add('hidden');
+        return;
+      }
+
+      const suggestions = [];
+      const addedKeys = new Set(); 
+
+      for (const [skuKey, data] of stockMap.entries()) {
+        if (suggestions.length >= 10) break; 
+        
+        if (selectedMerkFilter !== 'ALL' && data.merk !== selectedMerkFilter) continue;
+
+        if ((skuKey.toLowerCase().includes(searchTerm) || (data.name && data.name.toLowerCase().includes(searchTerm))) && !addedKeys.has(skuKey) && !selectedSkusArray.includes(skuKey)) {
+          suggestions.push({ sku: skuKey, ...data });
+          addedKeys.add(skuKey);
+          
+          let intCode = parseInt(skuKey, 10);
+          if(!isNaN(intCode)) addedKeys.add(intCode.toString());
+        }
+      }
+
+      let keywordHtml = `
+        <div class="px-4 py-2.5 bg-indigo-50/80 border-b border-indigo-100 cursor-pointer hover:bg-indigo-100 flex items-center text-indigo-700 font-semibold text-sm transition-colors" onclick="addSkuFromSuggestion('${searchTerm.replace(/'/g, "\\'")}')">
+          <i data-lucide="search" class="w-4 h-4 mr-2"></i> Gunakan "${searchTerm}" sebagai Kata Kunci
+        </div>
+      `;
+
+      if (suggestions.length > 0) {
+        skuSuggestionsBox.innerHTML = keywordHtml + suggestions.map(s => `
+          <div class="px-4 py-3 hover:bg-indigo-50 cursor-pointer border-b border-slate-100 transition-colors flex justify-between items-center" onclick="addSkuFromSuggestion('${s.sku}')">
+            <div class="flex-1 min-w-0 pr-4">
+              <div class="font-bold text-slate-800 text-sm mb-0.5 truncate">${s.name || '-'}</div>
+              <div class="text-xs text-slate-500 font-mono"><span class="bg-slate-100 px-1 py-0.5 rounded mr-1">${s.sku}</span> | ${s.merk}</div>
+            </div>
+            <div class="text-right shrink-0">
+              <div class="text-xs font-medium text-slate-400">${isHarga ? 'Harga' : 'Stok Acuan'}</div>
+              <div class="text-sm font-black text-indigo-600">${isHarga ? new Intl.NumberFormat('id-ID').format(s.price) : s.qty}</div>
+            </div>
+          </div>
+        `).join('');
+        skuSuggestionsBox.classList.remove('hidden');
+      } else {
+        skuSuggestionsBox.innerHTML = keywordHtml + `<div class="px-4 py-3 text-sm text-slate-500 italic text-center">Tidak ditemukan spesifik (Gunakan sbg Kata Kunci)</div>`;
+        skuSuggestionsBox.classList.remove('hidden');
+      }
+      lucide.createIcons();
+    });
+
+    window.addSkuFromSuggestion = function(sku) {
+      if (!selectedSkusArray.includes(sku)) {
+        selectedSkusArray.push(sku);
+        renderSkuChips();
+      }
+      filterSku.value = '';
+      skuSuggestionsBox.classList.add('hidden');
+      filterSku.focus();
+    };
+
+    document.addEventListener('click', (e) => {
+      if (!skuInputContainer.contains(e.target) && !skuSuggestionsBox.contains(e.target)) {
+        skuSuggestionsBox.classList.add('hidden');
+      }
+    });
+
+    filterSku.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace' && filterSku.value === '' && selectedSkusArray.length > 0) {
+        selectedSkusArray.pop();
+        renderSkuChips();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const newSku = filterSku.value.trim();
+        if (newSku && !selectedSkusArray.includes(newSku)) {
+          selectedSkusArray.push(newSku);
+          renderSkuChips();
+        }
+        filterSku.value = '';
+        skuSuggestionsBox.classList.add('hidden');
+      }
+    });
+
+    // --- PRATINJAU DINAMIS ---
+    
+    window.toggleRowSelection = function(id, isChecked) {
+      const item = currentPreviewData.find(i => i.id === id);
+      if(item) {
+        item.selected = isChecked;
+        renderPreviewTable(); 
+      }
+    };
+    
+    window.updateCustomValue = function(id, val) {
+      const item = currentPreviewData.find(i => i.id === id);
+      if(item) {
+        item.valBaru = val; 
+      }
+    };
+
+    window.toggleSortStock = function() {
+      if (sortStockOrder === 'none') {
+        sortStockOrder = 'desc';
+        document.getElementById('icon-sort-up').classList.add('text-slate-300');
+        document.getElementById('icon-sort-down').classList.replace('text-slate-300', 'text-indigo-600');
+      } else if (sortStockOrder === 'desc') {
+        sortStockOrder = 'asc';
+        document.getElementById('icon-sort-down').classList.replace('text-indigo-600', 'text-slate-300');
+        document.getElementById('icon-sort-up').classList.replace('text-slate-300', 'text-indigo-600');
+      } else {
+        sortStockOrder = 'none';
+        document.getElementById('icon-sort-up').classList.replace('text-indigo-600', 'text-slate-300');
+        document.getElementById('icon-sort-down').classList.add('text-slate-300');
+      }
+      previewCurrentPage = 1; 
+      renderPreviewTable();
+    };
+
+    inputPreviewSearch.addEventListener('input', (e) => {
+      previewSearchText = e.target.value;
+      previewCurrentPage = 1; 
+      renderPreviewTable();
+    });
+
+    document.getElementById('rows-per-page').addEventListener('change', (e) => {
+      previewRowsPerPage = parseInt(e.target.value);
+      previewCurrentPage = 1; 
+      renderPreviewTable();
+    });
+
+    document.getElementById('btn-prev-page').addEventListener('click', () => {
+      if (previewCurrentPage > 1) {
+        previewCurrentPage--;
+        renderPreviewTable();
+      }
+    });
+
+    document.getElementById('btn-next-page').addEventListener('click', () => {
+      previewCurrentPage++;
+      renderPreviewTable();
+    });
+
+    window.renderPreviewTable = function() {
+      previewTable.innerHTML = '';
+      let displayData = [...currentPreviewData];
+      
+      const isHarga = modeUpdate.value === 'harga';
+      
+      thValLama.innerText = isHarga ? "Harga Lama" : "Stok Lama";
+      thValBaru.innerText = isHarga ? "Harga Baru" : "Stok Baru";
+
+      if (previewSearchText) {
+        const lowerSearch = previewSearchText.toLowerCase();
+        displayData = displayData.filter(item => 
+          (item.sku && item.sku.toLowerCase().includes(lowerSearch)) || 
+          (item.namaProduk && item.namaProduk.toLowerCase().includes(lowerSearch))
+        );
+      }
+
+      const showOnlySelected = toggleSelectedOnly.checked;
+      if (showOnlySelected) {
+        displayData = displayData.filter(item => item.selected);
+      }
+
+      if (sortStockOrder !== 'none') {
+        displayData.sort((a, b) => {
+          let valA = parseInt(a.valBaru);
+          let valB = parseInt(b.valBaru);
+          if (isNaN(valA)) valA = -999999;
+          if (isNaN(valB)) valB = -999999;
+          return sortStockOrder === 'desc' ? (valB - valA) : (valA - valB);
+        });
+      }
+
+      const allEnabled = displayData.filter(d => d.canUpdate);
+      const allSelected = allEnabled.length > 0 && allEnabled.every(d => d.selected);
+      checkAllBtn.checked = allSelected;
+      
+      const totalItems = displayData.length;
+      const totalPages = Math.ceil(totalItems / previewRowsPerPage) || 1;
+      
+      if (previewCurrentPage > totalPages) previewCurrentPage = totalPages;
+      if (previewCurrentPage < 1) previewCurrentPage = 1;
+      
+      const startIndex = (previewCurrentPage - 1) * previewRowsPerPage;
+      const endIndex = Math.min(startIndex + previewRowsPerPage, totalItems);
+      
+      const paginatedData = displayData.slice(startIndex, endIndex);
+
+      document.getElementById('page-start').innerText = totalItems === 0 ? 0 : startIndex + 1;
+      document.getElementById('page-end').innerText = endIndex;
+      document.getElementById('page-total').innerText = totalItems;
+      document.getElementById('btn-prev-page').disabled = previewCurrentPage === 1;
+      document.getElementById('btn-next-page').disabled = previewCurrentPage === totalPages || totalPages === 0;
+
+      if (paginatedData.length === 0) {
+         previewTable.innerHTML = `<tr><td colspan="8" class="px-5 py-8 text-center text-slate-500 font-medium italic">Tidak ada data yang ditampilkan pada filter ini.</td></tr>`;
+         return;
+      }
+
+      paginatedData.forEach(item => {
+        let statusHtml = '';
+        if (item.canUpdate) {
+            if(item.isSimilar && item.bundleDivider > 1) {
+                let badgeText = isHarga ? `Paket (x${item.bundleDivider})` : `Paket (÷${item.bundleDivider})`;
+                let titleText = isHarga 
+                    ? `Harga asli ${item.baseQty} dikali ${item.bundleDivider} menjadi ${item.valBaru}` 
+                    : `Stok asli ${item.baseQty} dibagi ${item.bundleDivider} menjadi ${item.valBaru}`;
+                statusHtml = `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-amber-100 text-amber-700 border border-amber-200 shadow-sm cursor-help" title="${titleText}">SKU ${badgeText}</span>`;
+            } else if (item.isSimilar) {
+                statusHtml = `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-amber-100 text-amber-700 border border-amber-200 shadow-sm cursor-help" title="Diambil dari SKU: ${item.matchedBaseSku}">SKU Paket</span>`;
+            } else {
+                statusHtml = `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 shadow-sm">Ditemukan</span>`;
+            }
+        } else {
+          statusHtml = `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-slate-100 text-slate-500 border border-slate-200 shadow-sm">Tak Terdaftar</span>`;
+        }
+
+        const isCheckedHtml = item.selected ? 'checked' : '';
+        const disabledHtml = !item.canUpdate ? 'disabled' : '';
+        
+        let checkboxHtml = `<input type="checkbox" class="update-cb w-4 h-4 text-indigo-600 bg-white border-slate-300 rounded focus:ring-indigo-500 focus:ring-2 cursor-pointer transition-colors" data-id="${item.id}" onchange="toggleRowSelection('${item.id}', this.checked)" ${isCheckedHtml} ${disabledHtml}>`;
+        
+        let valueInputHtml = `<input type="number" class="w-28 px-2 py-1.5 text-right font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-300 ${!item.canUpdate ? 'opacity-50 cursor-not-allowed bg-slate-100 border-slate-200 text-slate-400' : 'hover:border-indigo-400'}" value="${item.valBaru}" onchange="updateCustomValue('${item.id}', this.value)" ${disabledHtml} min="0">`;
+        
+        if(!item.canUpdate) {
+          valueInputHtml = `<span class="text-slate-400 font-bold">-</span>`;
+        }
+
+        const tr = document.createElement('tr');
+        tr.className = `transition-all duration-200 group border-b border-slate-50 ${item.selected ? 'bg-indigo-50/10 hover:bg-indigo-50/40' : 'opacity-50 grayscale-[50%] bg-slate-50'}`;
+        
+        let formattedOldVal = item.valLama;
+        if (isHarga && formattedOldVal !== undefined && formattedOldVal !== '' && !isNaN(parseFloat(String(formattedOldVal).replace(/[^\d]/g, '')))) {
+            let numericOldVal = parseFloat(String(formattedOldVal).replace(/[^\d]/g, ''));
+            formattedOldVal = 'Rp ' + new Intl.NumberFormat('id-ID').format(numericOldVal);
+        } else if (!isHarga && formattedOldVal !== undefined && formattedOldVal !== '' && !isNaN(parseFloat(formattedOldVal))) {
+            formattedOldVal = new Intl.NumberFormat('id-ID').format(parseFloat(formattedOldVal));
+        } else if (formattedOldVal === undefined || formattedOldVal === '') {
+            formattedOldVal = '-';
+        }
+        
+        // Tampilan Toko (Biru = Balistationery, Ungu = Gomall)
+        let tokoBadgeColor = item.shopName === 'balistationery' ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-purple-100 text-purple-700 border-purple-200';
+
+        tr.innerHTML = `
+          <td class="px-5 py-4 text-center align-top">${checkboxHtml}</td>
+          <td class="px-5 py-4 align-top">
+            <span class="${tokoBadgeColor} uppercase tracking-wider px-2 py-1 rounded border inline-block text-center font-bold text-[10px] w-full" title="${item.shopName}">${item.shopName}</span>
+          </td>
+          <td class="px-5 py-4 align-top">
+            <div class="font-semibold text-slate-800 min-w-[180px] max-w-[300px] whitespace-normal leading-relaxed break-words">${item.namaProduk}</div>
+          </td>
+          <td class="px-5 py-4 font-mono text-sm text-center align-top"><span class="bg-white px-2 py-1 rounded text-slate-700 font-semibold border border-slate-200 shadow-sm">${item.sku || '-'}</span></td>
+          
+          <td class="px-5 py-4 text-right text-slate-400 font-medium align-top pt-5">${formattedOldVal}</td>
+          <td class="px-5 py-4 text-right align-top">${valueInputHtml}</td>
+          <td class="px-5 py-4 text-center align-top pt-5">${statusHtml}</td>
+        `;
+        previewTable.appendChild(tr);
+      });
+      lucide.createIcons();
+    };
+
+    btnPreview.addEventListener('click', () => {
+      currentPreviewData = [];
+      finalSummary.classList.add('hidden');
+      skuWarningArea.classList.add('hidden');
+      let foundSimilarSkus = false;
+      
+      sortStockOrder = 'none';
+      document.getElementById('icon-sort-up').className = "-mb-1.5 text-slate-300 transition-colors";
+      document.getElementById('icon-sort-down').className = "-mt-1.5 text-slate-300 transition-colors";
+      toggleSelectedOnly.checked = false;
+      previewSearchText = '';
+      inputPreviewSearch.value = '';
+      previewCurrentPage = 1;
+
+      const conf = platformConfig[currentPlatform];
+      const selectedMerk = filterMerk.value;
+      const selectedKategori = filterKategori.value; 
+      const isUpdateHarga = modeUpdate.value === 'harga'; 
+      
+      const remainingInput = filterSku.value.trim();
+      if (remainingInput && !selectedSkusArray.includes(remainingInput)) {
+        selectedSkusArray.push(remainingInput);
+        renderSkuChips();
+        filterSku.value = '';
+      }
+
+      // Loop Melalui Semua File Target yang Diunggah (Store 1 & 2)
+      const storesToProcess = [];
+      if (targetStore1) storesToProcess.push({ key: 1, data: targetStore1 });
+      if (targetStore2) storesToProcess.push({ key: 2, data: targetStore2 });
+
+      for (const storeObj of storesToProcess) {
+        const fileData = storeObj.data;
+        const targetRowsLoop = fileData.rows;
+        const headersIdx = fileData.headersRowIdx;
+        const sName = fileData.shop;
+
+        for (let i = headersIdx + 1; i < targetRowsLoop.length; i++) {
+          let row = targetRowsLoop[i];
+          if(!row || row.length === 0) continue;
+
+          let col0 = String(row[0] || '').trim();
+          let targetSku = String(row[conf.skuIdx2] || '').trim() || String(row[conf.skuIdx1] || '').trim();
+          let targetName = String(row[conf.namaIdx] || '').toLowerCase(); 
+          
+          if(currentPlatform === 'shopee') {
+            if(!col0 || isNaN(parseInt(col0))) continue;
+          } else {
+            if(!col0 && !targetSku) continue; 
+          }
+
+          let isPaket = targetSku.length > 5;
+
+          if (selectedKategori === 'REGULAR' && isPaket) continue;
+          if (selectedKategori === 'PAKET' && !isPaket) continue;
+          
+          let oldValRaw = row[isUpdateHarga ? conf.hargaIdx : conf.stokIdx];
+          let oldVal = oldValRaw;
+          
+          let stockData = null;
+          let isSimilar = false;
+          let matchedBaseSku = null;
+          let bundleDivider = 1;
+          let baseValue = 0;
+
+          if (targetSku) {
+            let intSkuStr = parseInt(targetSku, 10).toString();
+            
+            if (stockMap.has(targetSku)) {
+                stockData = stockMap.get(targetSku);
+                matchedBaseSku = targetSku;
+            } else if (stockMap.has(intSkuStr)) {
+                stockData = stockMap.get(intSkuStr);
+                matchedBaseSku = intSkuStr;
+            } else {
+                if (targetSku.length > 5) {
+                    let basePart = targetSku;
+                    let divider = 1;
+                    
+                    if (targetSku.includes('-')) {
+                        let parts = targetSku.split('-');
+                        basePart = parts[0].trim(); 
+                        
+                        let remainder = targetSku.substring(targetSku.indexOf('-') + 1);
+                        let matchNum = remainder.match(/\d+/);
+                        
+                        if (matchNum && parseInt(matchNum[0], 10) > 0) {
+                            divider = parseInt(matchNum[0], 10);
+                        }
+                    } else if (targetSku.length > 5) {
+                        basePart = targetSku.substring(0, 5);
+                    }
+
+                    let intBaseStr = parseInt(basePart, 10).toString();
+
+                    if (stockMap.has(basePart)) {
+                        stockData = stockMap.get(basePart);
+                        matchedBaseSku = basePart;
+                    } else if (!isNaN(parseInt(basePart)) && stockMap.has(intBaseStr)) {
+                        stockData = stockMap.get(intBaseStr);
+                        matchedBaseSku = intBaseStr;
+                    }
+
+                    if (stockData) {
+                        isSimilar = true;
+                        bundleDivider = divider;
+                    }
+                }
+            }
+          }
+
+          let itemMerk = stockData ? stockData.merk : '-';
+          if (selectedMerk !== 'ALL' && stockData && itemMerk !== selectedMerk) continue; 
+          
+          if (selectedSkusArray.length > 0) {
+             let isMatch = false;
+             for (let keyword of selectedSkusArray) {
+                 let kw = keyword.toLowerCase();
+                 if (targetName.includes(kw)) { isMatch = true; break; }
+                 if (targetSku.toLowerCase() === kw) { isMatch = true; break; }
+                 if (matchedBaseSku && matchedBaseSku.toLowerCase() === kw) { isMatch = true; break; }
+                 if (stockData && stockData.name && stockData.name.toLowerCase().includes(kw)) { isMatch = true; break; }
+             }
+             if (!isMatch) continue; 
+          }
+
+          let canUpdate = stockData !== null;
+          let newVal = '-';
+          
+          if (canUpdate) {
+              if (isUpdateHarga) {
+                  baseValue = stockData.price;
+                  newVal = Math.round(baseValue * bundleDivider); 
+              } else {
+                  baseValue = stockData.qty;
+                  newVal = Math.round(baseValue / bundleDivider); 
+              }
+          }
+
+          let namaProduk = row[conf.namaIdx] || '-';
+          if (isSimilar && bundleDivider > 1) foundSimilarSkus = true;
+
+          currentPreviewData.push({
+            id: `${storeObj.key}-${i}`,
+            storeKey: storeObj.key,
+            shopName: sName,
+            originalIndex: i,
+            namaProduk: namaProduk,
+            sku: targetSku,
+            merk: itemMerk,
+            valLama: oldVal,
+            valBaru: newVal,
+            baseQty: baseValue,
+            bundleDivider: bundleDivider,
+            matchedBaseSku: matchedBaseSku,
+            canUpdate: canUpdate,
+            selected: canUpdate,
+            isSimilar: isSimilar
+          });
+        }
+      }
+
+      if (foundSimilarSkus && (selectedKategori === 'ALL' || selectedKategori === 'PAKET')) {
+          skuWarningArea.classList.remove('hidden');
+          const warningText = skuWarningArea.querySelector('p');
+          if(isUpdateHarga) {
+              warningText.innerHTML = `Sistem mendeteksi SKU target yang merupakan variasi/paket dari SKU acuan Anda (contoh: <code class="bg-amber-100 px-1 rounded font-mono text-amber-900">01520-5RIM</code>). <br><strong class="text-amber-900 mt-1 inline-block">✨ Fitur Pintar Aktif:</strong> Karena ini Mode Update <b>Harga</b>, maka Harga master akan otomatis <b>DIKALI</b> dengan angka bundle. Anda dapat memverifikasi hasilnya di tabel bawah.`;
+          } else {
+              warningText.innerHTML = `Sistem mendeteksi SKU target yang merupakan variasi/paket dari SKU acuan Anda (contoh: <code class="bg-amber-100 px-1 rounded font-mono text-amber-900">01520-5RIM</code>). <br><strong class="text-amber-900 mt-1 inline-block">✨ Fitur Pintar Aktif:</strong> Karena ini Mode Update <b>Stok</b>, maka Stok master otomatis <b>DIBAGI</b> dengan angka bundle dan dibulatkan.`;
+          }
+      }
+
+      renderPreviewTable();
+      resultsArea.classList.remove('hidden');
+      setTimeout(() => resultsArea.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+    });
+
+    checkAllBtn.addEventListener('change', (e) => {
+      const isChecked = e.target.checked;
+      const renderedRowsCB = previewTable.querySelectorAll('.update-cb');
+      renderedRowsCB.forEach(cb => {
+        if(!cb.disabled) {
+           cb.checked = isChecked;
+           const id = cb.getAttribute('data-id');
+           const item = currentPreviewData.find(i => i.id === id);
+           if(item) item.selected = isChecked;
+           
+           const event = new Event('change', { bubbles: true });
+           cb.dispatchEvent(event);
+        }
+      });
+    });
+
+
+    // --- Aksi 2 & 3: Modal Custom Nama File & Eksekusi ---
+    
+    window.closeFilenameModal = function() {
+      modalFilename.classList.add('hidden');
+      modalFilename.classList.remove('flex');
+    };
+
+    btnExecutePrompt.addEventListener('click', () => {
+      const selectedItems = currentPreviewData.filter(i => i.selected);
+      if(selectedItems.length === 0) {
+        alert("Tidak ada data yang dipilih untuk diupdate.");
+        return;
+      }
+      
+      const isHarga = modeUpdate.value === 'harga';
+      document.getElementById('modal-type-text').innerText = isHarga ? 'harga' : 'stok';
+
+      const dateStr = new Date().toISOString().replace(/[:\-T]/g, '').slice(0, 14);
+      const typeName = isHarga ? 'harga' : 'stok';
+      inputFilename.value = `mass_update_${typeName}_${dateStr}`;
+      
+      modalFilename.classList.remove('hidden');
+      modalFilename.classList.add('flex');
+      inputFilename.focus();
+      inputFilename.select();
+    });
+
+    btnConfirmDownload.addEventListener('click', async () => {
+      try {
+        const conf = platformConfig[currentPlatform];
+        const isUpdateHarga = modeUpdate.value === 'harga'; 
+        let targetColumnIdx = isUpdateHarga ? conf.hargaIdx : conf.stokIdx; 
+        
+        let globalUpdatedCount = 0;
+        let globalValidRowsTarget = 0;
+
+        let baseFileName = inputFilename.value.trim().replace(/[^a-zA-Z0-9_\-\s]/g, ''); 
+        if(!baseFileName) baseFileName = "update";
+
+        const storesToProcess = [];
+        if (targetStore1) storesToProcess.push({ key: 1, data: targetStore1 });
+        if (targetStore2) storesToProcess.push({ key: 2, data: targetStore2 });
+
+        for (const storeObj of storesToProcess) {
+            const fileData = storeObj.data;
+            globalValidRowsTarget += fileData.totalValidRowsTarget;
+
+            const freshData = await readFileAsAoA(fileData.fileObj);
+            const freshWorkbook = freshData.workbook; 
+            const freshRows = freshData.rows;
+            const headersRowIdx = fileData.headersRowIdx;
+
+            const rowStateMap = new Map();
+            currentPreviewData.forEach(item => {
+              if(item.selected && item.storeKey === storeObj.key) {
+                 rowStateMap.set(item.originalIndex, item.valBaru);
+              }
+            });
+
+            const sheetName = freshWorkbook.SheetNames[0];
+            const ws = freshWorkbook.Sheets[sheetName];
+            const range = XLSX.utils.decode_range(ws['!ref']);
+            
+            let offset = 0; 
+            let fileUpdateCount = 0;
+
+            for (let R = headersRowIdx + 1; R <= range.e.r; ++R) {
+                 let rowIsSelected = false;
+                 let newVal = null;
+
+                 if (rowStateMap.has(R)) {
+                     rowIsSelected = true;
+                     newVal = rowStateMap.get(R);
+                 }
+
+                 let isProductRow = false;
+                 let rowData = freshRows[R];
+                 if(rowData) {
+                     let col0 = String(rowData[0] || '').trim();
+                     let targetSku = String(rowData[conf.skuIdx2] || '').trim() || String(rowData[conf.skuIdx1] || '').trim();
+                     if (currentPlatform === 'shopee') {
+                         isProductRow = col0 !== '' && !isNaN(parseInt(col0));
+                     } else {
+                         isProductRow = (col0 !== '' || targetSku !== '');
+                     }
+                 }
+
+                 let shouldKeep = false;
+                 if (!isProductRow) {
+                     shouldKeep = true; 
+                 } else if (rowIsSelected) {
+                     shouldKeep = true; 
+                 }
+
+                 if (shouldKeep) {
+                     if (offset > 0) {
+                         for (let C = range.s.c; C <= range.e.c; ++C) {
+                             const sourceCell = XLSX.utils.encode_cell({c: C, r: R});
+                             const targetCell = XLSX.utils.encode_cell({c: C, r: R - offset});
+                             if (ws[sourceCell]) {
+                                 ws[targetCell] = ws[sourceCell];
+                             } else {
+                                 delete ws[targetCell];
+                             }
+                         }
+                     }
+                     
+                     if (isProductRow && rowIsSelected) {
+                         const targetCell = XLSX.utils.encode_cell({c: targetColumnIdx, r: R - offset});
+                         let customVal = parseInt(newVal);
+                         if(isNaN(customVal)) customVal = 0;
+                         
+                         if (ws[targetCell]) {
+                             ws[targetCell].v = customVal;
+                             ws[targetCell].t = 'n';
+                         } else {
+                             ws[targetCell] = { t: 'n', v: customVal };
+                         }
+                         fileUpdateCount++;
+                         globalUpdatedCount++;
+                     }
+                 } else {
+                     offset++; 
+                 }
+            }
+            
+            for (let R = range.e.r - offset + 1; R <= range.e.r; ++R) {
+                for (let C = range.s.c; C <= range.e.c; ++C) {
+                    const cell = XLSX.utils.encode_cell({c: C, r: R});
+                    delete ws[cell];
+                }
+            }
+            
+            range.e.r -= offset; 
+            ws['!ref'] = XLSX.utils.encode_range(range);
+
+            XLSX.writeFile(freshWorkbook, `${baseFileName}_${fileData.shop}.xlsx`);
+            
+            // Jeda 500ms untuk mencegah browser nge-block multiple download pop-up
+            await new Promise(r => setTimeout(r, 500));
+        }
+
+        document.getElementById('res-total').innerText = globalUpdatedCount; 
+        document.getElementById('res-updated').innerText = globalUpdatedCount;
+        document.getElementById('res-missing').innerText = globalValidRowsTarget - globalUpdatedCount; 
+
+        closeFilenameModal();
+        finalSummary.classList.remove('hidden');
+        setTimeout(() => finalSummary.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200);
+
+      } catch (err) {
+        alert("Terjadi kesalahan saat mengeksekusi file: " + err.message);
+      }
+    });
+
+  </script>
+</body>
+</html>
