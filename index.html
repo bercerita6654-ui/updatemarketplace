@@ -1489,7 +1489,7 @@
               }
             });
 
-            const sheetName = freshWorkbook.SheetNames[0];
+            const sheetName = fileData.sheetName || freshWorkbook.SheetNames[0];
             const ws = freshWorkbook.Sheets[sheetName];
             const range = XLSX.utils.decode_range(ws['!ref']);
             
@@ -1571,10 +1571,14 @@
             range.e.r -= offset; 
             ws['!ref'] = XLSX.utils.encode_range(range);
 
+            // Buat Workbook Baru yang HANYA berisi sheet saat ini agar sheet lain tidak ikut terdownload
+            const singleSheetWorkbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(singleSheetWorkbook, ws, sheetName);
+
             let safeShop = fileData.shop.toLowerCase().replace(/\s+/g, '');
             let finalFileName = `${safeMerk}-${safeShop}-${safePlatform} [${dateStr}].xlsx`;
             
-            XLSX.writeFile(freshWorkbook, finalFileName);
+            XLSX.writeFile(singleSheetWorkbook, finalFileName);
             
             await new Promise(r => setTimeout(r, 500));
         }
