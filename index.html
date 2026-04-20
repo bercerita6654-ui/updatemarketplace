@@ -410,7 +410,7 @@
 
   </div> <!-- /Container Grid 2 Kolom -->
 
-  <!-- Modal Popup Ketik Nama File -->
+  <!-- Modal Popup Konfirmasi Download -->
   <div id="modal-filename" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-900/60 backdrop-blur-sm transition-all fade-in">
     <div class="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl transform transition-all fade-in-up m-4">
       <div class="flex items-center mb-4">
@@ -419,13 +419,15 @@
         </div>
         <h3 class="text-xl font-bold text-slate-800">Simpan File Excel Baru</h3>
       </div>
-      <p class="text-sm text-slate-500 mb-4 leading-relaxed">Sistem akan mengekstrak file berdasarkan data yang Anda pilih dan nilai <span id="modal-type-text">stok</span> yang sudah Anda ubah. Sistem akan otomatis menambahkan nama Toko di akhir nama file (misal: <code class="bg-slate-100 text-indigo-600 px-1 rounded">..._balistationery.xlsx</code>).</p>
+      <p class="text-sm text-slate-500 mb-4 leading-relaxed">
+        Sistem akan mengekstrak file berdasarkan data yang dipilih. <strong class="text-indigo-600">Nilai minus (jika ada) akan otomatis dijadikan 0.</strong> File Anda akan disimpan dengan format nama otomatis:
+      </p>
       
       <div class="mb-6">
-        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Awalan Nama File Download:</label>
         <div class="relative">
-          <input type="text" id="input-filename" class="w-full px-3 py-3 bg-slate-50 border-2 border-slate-200 text-slate-800 font-medium rounded-xl focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" value="mass_update_terbaru">
+          <input type="text" id="input-filename" class="w-full px-4 py-3 bg-slate-100 border-2 border-slate-200 text-slate-600 font-mono text-sm rounded-xl outline-none cursor-not-allowed" readonly>
         </div>
+        <p class="text-[11px] text-slate-400 mt-2 font-medium">*Nama toko akan otomatis ditambahkan pada saat file diunduh.</p>
       </div>
 
       <div class="flex justify-end gap-3">
@@ -470,8 +472,8 @@
 
     // Global Variables
     let stockMap = new Map(); 
-    let targetStore1 = null; // { shop: 'Balistationery', workbook, rows, headersRowIdx, totalValidRowsTarget, fileObj }
-    let targetStore2 = null; // { shop: 'Gomall', ... }
+    let targetStore1 = null; 
+    let targetStore2 = null; 
     let selectedSkusArray = []; 
     
     let currentPreviewData = []; 
@@ -944,6 +946,12 @@
     window.updateCustomValue = function(id, val) {
       const item = currentPreviewData.find(i => i.id === id);
       if(item) {
+        const isHarga = modeUpdate.value === 'harga';
+        let numericVal = parseInt(val);
+        // Fallback proteksi stok minus di input UI
+        if (!isHarga && !isNaN(numericVal) && numericVal < 0) {
+            val = 0; 
+        }
         item.valBaru = val; 
       }
     };
@@ -1248,6 +1256,8 @@
               } else {
                   baseValue = stockData.qty;
                   newVal = Math.round(baseValue / bundleDivider); 
+                  // Proteksi preview
+                  if(newVal < 0) newVal = 0;
               }
           }
 
@@ -1321,16 +1331,27 @@
       }
       
       const isHarga = modeUpdate.value === 'harga';
-      document.getElementById('modal-type-text').innerText = isHarga ? 'harga' : 'stok';
 
-      const dateStr = new Date().toISOString().replace(/[:\-T]/g, '').slice(0, 14);
-      const typeName = isHarga ? 'harga' : 'stok';
-      inputFilename.value = `mass_update_${typeName}_${dateStr}`;
+      // Setup format tanggal: DD-MM-YYYY
+      const today = new Date();
+      const dd = String(today.getDate()).padStart(2, '0');
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const yyyy = today.getFullYear();
+      const dateStr = `${dd}-${mm}-${yyyy}`;
+      
+      // Sanitasi Nama Merk (contoh: "Joyko" jadi "joyko", jika ALL jadi "semuamerk")
+      let selectedMerk = filterMerk.value;
+      if (selectedMerk === 'ALL') selectedMerk = 'semuamerk';
+      const safeMerk = selectedMerk.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '');
+
+      // Format Tampilan di Input PopUp
+      // [Merk]-[Toko]-[mode toko] [tgl download].xlsx
+      const formatPreview = `${safeMerk}-<toko>-${currentPlatform} [${dateStr}].xlsx`;
+      
+      inputFilename.value = formatPreview;
       
       modalFilename.classList.remove('hidden');
       modalFilename.classList.add('flex');
-      inputFilename.focus();
-      inputFilename.select();
     });
 
     btnConfirmDownload.addEventListener('click', async () => {
@@ -1342,8 +1363,17 @@
         let globalUpdatedCount = 0;
         let globalValidRowsTarget = 0;
 
-        let baseFileName = inputFilename.value.trim().replace(/[^a-zA-Z0-9_\-\s]/g, ''); 
-        if(!baseFileName) baseFileName = "update";
+        // Persiapan Variabel Naming
+        const today = new Date();
+        const dd = String(today.getDate()).padStart(2, '0');
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const yyyy = today.getFullYear();
+        const dateStr = `${dd}-${mm}-${yyyy}`;
+        
+        let selectedMerk = filterMerk.value;
+        if (selectedMerk === 'ALL') selectedMerk = 'semuamerk';
+        const safeMerk = selectedMerk.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '');
+        const safePlatform = currentPlatform.toLowerCase();
 
         const storesToProcess = [];
         if (targetStore1) storesToProcess.push({ key: 1, data: targetStore1 });
@@ -1418,6 +1448,11 @@
                          let customVal = parseInt(newVal);
                          if(isNaN(customVal)) customVal = 0;
                          
+                         // PROTEKSI STOK MINUS -> JADIKAN 0
+                         if (!isUpdateHarga && customVal < 0) {
+                             customVal = 0;
+                         }
+                         
                          if (ws[targetCell]) {
                              ws[targetCell].v = customVal;
                              ws[targetCell].t = 'n';
@@ -1442,7 +1477,11 @@
             range.e.r -= offset; 
             ws['!ref'] = XLSX.utils.encode_range(range);
 
-            XLSX.writeFile(freshWorkbook, `${baseFileName}_${fileData.shop}.xlsx`);
+            // Terapkan Naming Format: [Merk]-[nama Toko]-[mode toko] [tgl download].xlsx 
+            let safeShop = fileData.shop.toLowerCase().replace(/\s+/g, '');
+            let finalFileName = `${safeMerk}-${safeShop}-${safePlatform} [${dateStr}].xlsx`;
+            
+            XLSX.writeFile(freshWorkbook, finalFileName);
             
             // Jeda 500ms untuk mencegah browser nge-block multiple download pop-up
             await new Promise(r => setTimeout(r, 500));
