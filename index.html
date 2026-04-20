@@ -571,7 +571,6 @@
     // --- INTEGRASI CLOUD (GOOGLE SHEETS) ---
     const parseBufferAsAoA = (buffer, sheetName) => {
         const workbook = XLSX.read(buffer, {type: 'array', cellDates: true, cellStyles: true}); 
-        // Jika sheetName tidak ketemu/kosong, fallback ke sheet pertama
         const sName = (sheetName && workbook.Sheets[sheetName]) ? sheetName : workbook.SheetNames[0];
         if (!workbook.Sheets[sName]) throw new Error(`Sheet ${sName} tidak ditemukan`);
         const worksheet = workbook.Sheets[sName];
@@ -622,7 +621,6 @@
         if (storeKey === 1) targetStore1 = storeData;
         if (storeKey === 2) targetStore2 = storeData;
 
-        // Update UI
         const tc = platformConfig[currentPlatform].themeColor;
         const dropZone = document.getElementById(`drop-zone-target-${storeKey}`);
         dropZone.className = `border-2 border-dashed border-${tc}-500 rounded-xl p-6 text-center bg-${tc}-50 cursor-pointer flex-1 flex flex-col items-center justify-center relative group`;
@@ -650,13 +648,11 @@
         lucide.createIcons();
 
         try {
-            // URL Sheet yang diberikan user (diubah jadi output=xlsx untuk ambil semua sheet sekaligus)
             const url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQx0BFAgsm811XUZuhPfwJ1jKKJir7ErQHsT9VoBbIYb7AqubXL9ANtMHfx3-idHJ20BtdLyg2MRce4/pub?output=xlsx";
             const response = await fetch(url);
             if (!response.ok) throw new Error("Network response was not ok");
             const buffer = await response.arrayBuffer();
 
-            // Mapping nama sheet
             const sheet1 = currentPlatform === 'shopee' ? 'Shopee balist' : 'Toped-Balist';
             const sheet2 = currentPlatform === 'shopee' ? 'Shopee Gomall' : 'Toped-Gomall';
             
@@ -690,7 +686,6 @@
       if(currentPlatform === platform) return;
       currentPlatform = platform;
       
-      // Reset Targets
       targetStore1 = null;
       targetStore2 = null;
       document.getElementById('input-target-1').value = '';
@@ -737,7 +732,7 @@
       checkReady();
     };
 
-    // --- Listener Perubahan Mode Update (Stok / Harga) ---
+    // --- Listener Perubahan Mode Update ---
     modeUpdate.addEventListener('change', (e) => {
       const isHarga = e.target.value === 'harga';
       const masterDesc = document.getElementById('master-desc-text');
@@ -762,7 +757,7 @@
       }
     });
 
-    // --- Handler: File StockList ---
+    // --- Handler: File StockList (REVISED - LEBIH PINTAR & AMAN) ---
     inputStock.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -783,33 +778,49 @@
         const mNameIdx = 2; 
         const mMerkIdx = 6; 
         
-        for (let i = 1; i < rows.length; i++) {
+        for (let i = 0; i < rows.length; i++) {
           const row = rows[i];
-          if(!row || row.length <= Math.max(mSkuIdx, mValIdx)) continue;
+          if(!row || row.length === 0) continue;
           
           let codeVal = row[mSkuIdx];
+          if (codeVal === undefined || codeVal === null || codeVal === "") continue;
+          
+          let strCode = String(codeVal).trim();
+          
+          // Abaikan baris header 
+          if (strCode.toLowerCase() === 'sku' || strCode.toLowerCase() === 'kode produk' || strCode.toLowerCase() === 'item sku') continue;
+
           let valData = row[mValIdx];
           let nameVal = String(row[mNameIdx] || '').trim();
           let merkVal = String(row[mMerkIdx] || '').trim();
           if(!merkVal) merkVal = "TIDAK ADA MERK";
 
-          if(codeVal !== undefined && codeVal !== "" && valData !== undefined) {
-            let strCode = String(codeVal).trim();
-            let intCode = parseInt(strCode, 10);
-            
-            const itemData = { 
-                qty: isHarga ? 0 : (parseInt(valData) || 0), 
-                price: isHarga ? (parseFloat(valData) || 0) : 0,
-                merk: merkVal, 
-                name: nameVal 
-            };
-            
-            stockMap.set(strCode, itemData);
-            if(!isNaN(intCode)) stockMap.set(intCode.toString(), itemData);
-            
-            uniqueMerks.add(merkVal);
-            loadedItems++;
+          let intCode = parseInt(strCode, 10);
+          
+          // Parsing value yang aman meskipun sel kosong
+          let numericVal = 0;
+          if (isHarga) {
+             numericVal = parseFloat(String(valData || '0').replace(/[^\d.-]/g, '')) || 0;
+          } else {
+             numericVal = parseInt(valData || '0', 10) || 0;
           }
+          
+          const itemData = { 
+              qty: isHarga ? 0 : numericVal, 
+              price: isHarga ? numericVal : 0,
+              merk: merkVal, 
+              name: nameVal 
+          };
+          
+          stockMap.set(strCode, itemData);
+          if(!isNaN(intCode)) stockMap.set(intCode.toString(), itemData);
+          
+          uniqueMerks.add(merkVal);
+          loadedItems++;
+        }
+
+        if (loadedItems === 0) {
+           throw new Error("Tidak ada data SKU yang valid ditemukan. Pastikan format kolom sesuai dengan instruksi.");
         }
 
         filterMerk.innerHTML = '<option value="ALL">Semua Merk</option>';
@@ -832,7 +843,8 @@
 
       } catch (err) {
         alert(err.message);
-        e.target.value = '';
+      } finally {
+        e.target.value = ''; // Reset input agar file yang sama bisa di-upload ulang
       }
     });
 
@@ -845,6 +857,7 @@
             await processTargetDataBuffer(buffer, file.name, 1, 'balistationery', null);
         } catch(err) {
             alert(`Error Toko 1: ${err.message}`);
+        } finally {
             e.target.value = '';
         }
     });
@@ -857,6 +870,7 @@
             await processTargetDataBuffer(buffer, file.name, 2, 'gomall', null);
         } catch(err) {
             alert(`Error Toko 2: ${err.message}`);
+        } finally {
             e.target.value = '';
         }
     });
@@ -1013,7 +1027,6 @@
       if(item) {
         const isHarga = modeUpdate.value === 'harga';
         let numericVal = parseInt(val);
-        // Fallback proteksi stok minus di input UI
         if (!isHarga && !isNaN(numericVal) && numericVal < 0) {
             val = 0; 
         }
@@ -1163,7 +1176,6 @@
             formattedOldVal = '-';
         }
         
-        // Tampilan Toko (Biru = Balistationery, Ungu = Gomall)
         let tokoBadgeColor = item.shopName === 'balistationery' ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-purple-100 text-purple-700 border-purple-200';
 
         tr.innerHTML = `
@@ -1211,7 +1223,6 @@
         filterSku.value = '';
       }
 
-      // Loop Melalui Semua File Target yang Diunggah (Store 1 & 2)
       const storesToProcess = [];
       if (targetStore1) storesToProcess.push({ key: 1, data: targetStore1 });
       if (targetStore2) storesToProcess.push({ key: 2, data: targetStore2 });
@@ -1321,7 +1332,6 @@
               } else {
                   baseValue = stockData.qty;
                   newVal = Math.round(baseValue / bundleDivider); 
-                  // Proteksi preview
                   if(newVal < 0) newVal = 0;
               }
           }
@@ -1397,20 +1407,16 @@
       
       const isHarga = modeUpdate.value === 'harga';
 
-      // Setup format tanggal: DD-MM-YYYY
       const today = new Date();
       const dd = String(today.getDate()).padStart(2, '0');
       const mm = String(today.getMonth() + 1).padStart(2, '0');
       const yyyy = today.getFullYear();
       const dateStr = `${dd}-${mm}-${yyyy}`;
       
-      // Sanitasi Nama Merk (contoh: "Joyko" jadi "joyko", jika ALL jadi "semuamerk")
       let selectedMerk = filterMerk.value;
       if (selectedMerk === 'ALL') selectedMerk = 'semuamerk';
       const safeMerk = selectedMerk.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '');
 
-      // Format Tampilan di Input PopUp
-      // [Merk]-[Toko]-[mode toko] [tgl download].xlsx
       const formatPreview = `${safeMerk}-<toko>-${currentPlatform} [${dateStr}].xlsx`;
       
       inputFilename.value = formatPreview;
@@ -1428,7 +1434,6 @@
         let globalUpdatedCount = 0;
         let globalValidRowsTarget = 0;
 
-        // Persiapan Variabel Naming
         const today = new Date();
         const dd = String(today.getDate()).padStart(2, '0');
         const mm = String(today.getMonth() + 1).padStart(2, '0');
@@ -1448,8 +1453,14 @@
             const fileData = storeObj.data;
             globalValidRowsTarget += fileData.totalValidRowsTarget;
 
-            // Load original buffer instead of using file API directly
-            const freshData = parseBufferAsAoA(fileData.buffer, fileData.sheetName);
+            let freshData;
+            // Jika dari Cloud, buffer ada. Jika dari input file biasa, buffer tidak diset.
+            if(fileData.buffer) {
+                freshData = parseBufferAsAoA(fileData.buffer, fileData.sheetName);
+            } else {
+                freshData = await readFileAsAoA(fileData.fileObj);
+            }
+
             const freshWorkbook = freshData.workbook; 
             const freshRows = freshData.rows;
             const headersRowIdx = fileData.headersRowIdx;
@@ -1543,13 +1554,11 @@
             range.e.r -= offset; 
             ws['!ref'] = XLSX.utils.encode_range(range);
 
-            // Terapkan Naming Format: [Merk]-[nama Toko]-[mode toko] [tgl download].xlsx 
             let safeShop = fileData.shop.toLowerCase().replace(/\s+/g, '');
             let finalFileName = `${safeMerk}-${safeShop}-${safePlatform} [${dateStr}].xlsx`;
             
             XLSX.writeFile(freshWorkbook, finalFileName);
             
-            // Jeda 500ms untuk mencegah browser nge-block multiple download pop-up
             await new Promise(r => setTimeout(r, 500));
         }
 
