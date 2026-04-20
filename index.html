@@ -1489,8 +1489,14 @@
               }
             });
 
-            const sheetName = fileData.sheetName || freshWorkbook.SheetNames[0];
-            const ws = freshWorkbook.Sheets[sheetName];
+            // Ekstrak HANYA sheet spesifik yang diminta
+            const targetSheetName = fileData.sheetName || freshWorkbook.SheetNames[0];
+            const ws = freshWorkbook.Sheets[targetSheetName];
+            
+            if (!ws) {
+                throw new Error(`Gagal menemukan sheet ${targetSheetName} di dalam file/cloud.`);
+            }
+
             const range = XLSX.utils.decode_range(ws['!ref']);
             
             let offset = 0; 
@@ -1571,9 +1577,10 @@
             range.e.r -= offset; 
             ws['!ref'] = XLSX.utils.encode_range(range);
 
-            // Buat Workbook Baru yang HANYA berisi sheet saat ini agar sheet lain tidak ikut terdownload
+            // GANTI MEKANISME EKSPOR
+            // Simpan Sheet Target ke Buku Kosong agar 100% hanya 1 Sheet yang di-export
             const singleSheetWorkbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(singleSheetWorkbook, ws, sheetName);
+            XLSX.utils.book_append_sheet(singleSheetWorkbook, ws, targetSheetName);
 
             let safeShop = fileData.shop.toLowerCase().replace(/\s+/g, '');
             let finalFileName = `${safeMerk}-${safeShop}-${safePlatform} [${dateStr}].xlsx`;
