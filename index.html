@@ -79,6 +79,22 @@
         </div>
       </div>
 
+      <!-- Cloud Integration Banner -->
+      <div class="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 md:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all hover:shadow-md">
+        <div class="flex items-center">
+          <div class="bg-indigo-600 p-2.5 rounded-xl text-white mr-4 shadow-md">
+            <i data-lucide="cloud-download" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <h2 class="text-base font-bold text-indigo-900">Integrasi Cloud Otomatis (Google Sheets)</h2>
+            <p class="text-xs font-medium text-indigo-700 mt-0.5">Sistem akan mengambil data Toko 1 & Toko 2 otomatis berdasarkan Mode (Shopee/Tokopedia).</p>
+          </div>
+        </div>
+        <button id="btn-cloud" onclick="fetchCloudData()" class="w-full md:w-auto px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold rounded-xl shadow-md shadow-indigo-200 transition-all flex items-center justify-center shrink-0">
+          <i data-lucide="download-cloud" class="w-4 h-4 mr-2"></i> Tarik Data Target
+        </button>
+      </div>
+
       <!-- Upload Section -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
@@ -552,6 +568,123 @@
       }
     };
 
+    // --- INTEGRASI CLOUD (GOOGLE SHEETS) ---
+    const parseBufferAsAoA = (buffer, sheetName) => {
+        const workbook = XLSX.read(buffer, {type: 'array', cellDates: true, cellStyles: true}); 
+        // Jika sheetName tidak ketemu/kosong, fallback ke sheet pertama
+        const sName = (sheetName && workbook.Sheets[sheetName]) ? sheetName : workbook.SheetNames[0];
+        if (!workbook.Sheets[sName]) throw new Error(`Sheet ${sName} tidak ditemukan`);
+        const worksheet = workbook.Sheets[sName];
+        const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+        return { workbook, rows, sheetName: sName };
+    };
+
+    async function processTargetDataBuffer(buffer, fileName, storeKey, shopName, specificSheet) {
+        const parsed = parseBufferAsAoA(buffer, specificSheet);
+        const workbook = parsed.workbook;
+        const rows = parsed.rows;
+        const sName = parsed.sheetName;
+
+        if(rows.length < 2) throw new Error("Format file tidak valid.");
+
+        let headersRowIdx = 2;
+        if (currentPlatform === 'shopee') {
+          headersRowIdx = rows.findIndex(row => 
+            row.some(cell => {
+              const str = String(cell).toLowerCase();
+              return str.includes('kode produk') || str === 'sku' || str.includes('nomor sku') || str === 'id produk';
+            })
+          );
+          if(headersRowIdx === -1) headersRowIdx = platformConfig.shopee.headerRowIdx;
+        } else {
+          headersRowIdx = platformConfig.tokopedia.headerRowIdx;
+        }
+
+        let validRowsTarget = 0;
+        for (let i = headersRowIdx + 1; i < rows.length; i++) {
+          let col0 = String(rows[i][0] || '').trim();
+          let skuCol = String(rows[i][platformConfig[currentPlatform].skuIdx1] || '').trim();
+          if(col0 !== '' || skuCol !== '') {
+            validRowsTarget++;
+          }
+        }
+
+        const storeData = {
+            shop: shopName,
+            workbook: workbook,
+            rows: rows,
+            headersRowIdx: headersRowIdx,
+            totalValidRowsTarget: validRowsTarget,
+            buffer: buffer,
+            sheetName: sName
+        };
+
+        if (storeKey === 1) targetStore1 = storeData;
+        if (storeKey === 2) targetStore2 = storeData;
+
+        // Update UI
+        const tc = platformConfig[currentPlatform].themeColor;
+        const dropZone = document.getElementById(`drop-zone-target-${storeKey}`);
+        dropZone.className = `border-2 border-dashed border-${tc}-500 rounded-xl p-6 text-center bg-${tc}-50 cursor-pointer flex-1 flex flex-col items-center justify-center relative group`;
+        
+        const iconTarget = document.getElementById(`icon-target-${storeKey}`);
+        iconTarget.classList.remove('text-slate-400');
+        iconTarget.classList.add(`text-${tc}-500`);
+        iconTarget.setAttribute('data-lucide', 'check-circle');
+        
+        document.getElementById(`text-target-${storeKey}`).innerText = fileName;
+        
+        const statusTarget = document.getElementById(`status-target-${storeKey}`);
+        statusTarget.innerText = `Siap (${validRowsTarget} baris)`;
+        statusTarget.classList.remove('hidden');
+        
+        lucide.createIcons();
+        checkReady();
+    }
+
+    window.fetchCloudData = async function() {
+        const btn = document.getElementById('btn-cloud');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 mr-2 animate-spin"></i> Menarik Data...`;
+        btn.disabled = true;
+        lucide.createIcons();
+
+        try {
+            // URL Sheet yang diberikan user (diubah jadi output=xlsx untuk ambil semua sheet sekaligus)
+            const url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQx0BFAgsm811XUZuhPfwJ1jKKJir7ErQHsT9VoBbIYb7AqubXL9ANtMHfx3-idHJ20BtdLyg2MRce4/pub?output=xlsx";
+            const response = await fetch(url);
+            if (!response.ok) throw new Error("Network response was not ok");
+            const buffer = await response.arrayBuffer();
+
+            // Mapping nama sheet
+            const sheet1 = currentPlatform === 'shopee' ? 'Shopee balist' : 'Toped-Balist';
+            const sheet2 = currentPlatform === 'shopee' ? 'Shopee Gomall' : 'Toped-Gomall';
+            
+            let loadedCount = 0;
+            
+            try {
+                await processTargetDataBuffer(buffer, `[Cloud] ${sheet1}`, 1, 'balistationery', sheet1);
+                loadedCount++;
+            } catch(e) { console.warn("Gagal load Toko 1:", e); }
+            
+            try {
+                await processTargetDataBuffer(buffer, `[Cloud] ${sheet2}`, 2, 'gomall', sheet2);
+                loadedCount++;
+            } catch(e) { console.warn("Gagal load Toko 2:", e); }
+            
+            if (loadedCount === 0) {
+                alert(`Gagal! Pastikan nama Sheet "${sheet1}" dan "${sheet2}" tersedia di dokumen Google Sheets tersebut.`);
+            }
+
+        } catch(e) {
+            alert("Gagal mengambil data dari cloud: " + e.message);
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+            lucide.createIcons();
+        }
+    };
+
     // --- Platform Switcher ---
     window.setPlatform = function(platform) {
       if(currentPlatform === platform) return;
@@ -629,26 +762,6 @@
       }
     });
 
-    // --- Utilitas ---
-    const readFileAsAoA = (file) => {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          try {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, {type: 'array', cellDates: true, cellStyles: true}); 
-            const firstSheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[firstSheetName];
-            const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
-            resolve({ workbook, rows });
-          } catch(err) {
-            reject(err);
-          }
-        };
-        reader.readAsArrayBuffer(file);
-      });
-    };
-
     // --- Handler: File StockList ---
     inputStock.addEventListener('change', async (e) => {
       const file = e.target.files[0];
@@ -723,78 +836,30 @@
       }
     });
 
-    // --- Handler: File Target (Dinamis 2 Toko) ---
-    async function processTargetUpload(e, storeKey, shopName) {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      try {
-        const data = await readFileAsAoA(file);
-        const workbook = data.workbook; 
-        const rows = data.rows;
-        
-        if(rows.length < 2) throw new Error("Format file tidak valid.");
-
-        let headersRowIdx = 2;
-        if (currentPlatform === 'shopee') {
-          headersRowIdx = rows.findIndex(row => 
-            row.some(cell => {
-              const str = String(cell).toLowerCase();
-              return str.includes('kode produk') || str === 'sku' || str.includes('nomor sku') || str === 'id produk';
-            })
-          );
-          if(headersRowIdx === -1) headersRowIdx = platformConfig.shopee.headerRowIdx;
-        } else {
-          headersRowIdx = platformConfig.tokopedia.headerRowIdx;
+    // --- Handler: File Target Manual Upload ---
+    document.getElementById('input-target-1').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+            const buffer = await file.arrayBuffer();
+            await processTargetDataBuffer(buffer, file.name, 1, 'balistationery', null);
+        } catch(err) {
+            alert(`Error Toko 1: ${err.message}`);
+            e.target.value = '';
         }
+    });
 
-        let validRowsTarget = 0;
-        for (let i = headersRowIdx + 1; i < rows.length; i++) {
-          let col0 = String(rows[i][0] || '').trim();
-          let skuCol = String(rows[i][platformConfig[currentPlatform].skuIdx1] || '').trim();
-          if(col0 !== '' || skuCol !== '') {
-            validRowsTarget++;
-          }
+    document.getElementById('input-target-2').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+            const buffer = await file.arrayBuffer();
+            await processTargetDataBuffer(buffer, file.name, 2, 'gomall', null);
+        } catch(err) {
+            alert(`Error Toko 2: ${err.message}`);
+            e.target.value = '';
         }
-
-        const storeData = {
-            shop: shopName,
-            workbook: workbook,
-            rows: rows,
-            headersRowIdx: headersRowIdx,
-            totalValidRowsTarget: validRowsTarget,
-            fileObj: file
-        };
-
-        if (storeKey === 1) targetStore1 = storeData;
-        if (storeKey === 2) targetStore2 = storeData;
-
-        const tc = platformConfig[currentPlatform].themeColor;
-        const dropZone = document.getElementById(`drop-zone-target-${storeKey}`);
-        dropZone.className = `border-2 border-dashed border-${tc}-500 rounded-xl p-6 text-center bg-${tc}-50 cursor-pointer flex-1 flex flex-col items-center justify-center relative group`;
-        
-        const iconTarget = document.getElementById(`icon-target-${storeKey}`);
-        iconTarget.classList.remove('text-slate-400');
-        iconTarget.classList.add(`text-${tc}-500`);
-        iconTarget.setAttribute('data-lucide', 'check-circle');
-        
-        document.getElementById(`text-target-${storeKey}`).innerText = file.name;
-        
-        const statusTarget = document.getElementById(`status-target-${storeKey}`);
-        statusTarget.innerText = `Siap (${validRowsTarget} baris)`;
-        statusTarget.classList.remove('hidden');
-        
-        lucide.createIcons();
-        checkReady();
-
-      } catch (err) {
-        alert(`Error pada file Toko ${storeKey}: ${err.message}`);
-        e.target.value = '';
-      }
-    }
-
-    document.getElementById('input-target-1').addEventListener('change', (e) => processTargetUpload(e, 1, 'balistationery'));
-    document.getElementById('input-target-2').addEventListener('change', (e) => processTargetUpload(e, 2, 'gomall'));
+    });
 
     function checkReady() {
       if (stockMap.size > 0 && (targetStore1 !== null || targetStore2 !== null)) {
@@ -1383,7 +1448,8 @@
             const fileData = storeObj.data;
             globalValidRowsTarget += fileData.totalValidRowsTarget;
 
-            const freshData = await readFileAsAoA(fileData.fileObj);
+            // Load original buffer instead of using file API directly
+            const freshData = parseBufferAsAoA(fileData.buffer, fileData.sheetName);
             const freshWorkbook = freshData.workbook; 
             const freshRows = freshData.rows;
             const headersRowIdx = fileData.headersRowIdx;
