@@ -185,6 +185,7 @@
               <select id="mode-update" class="appearance-none bg-indigo-50 border-2 border-indigo-200 text-indigo-800 text-sm font-bold rounded-xl focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 block w-full h-full px-3 pr-10 transition-all outline-none cursor-pointer">
                 <option value="stok">🔄 Update Stok</option>
                 <option value="harga">💰 Update Harga</option>
+                <option value="compare">⚖️ Compare Harga</option>
               </select>
               <i data-lucide="chevron-down" class="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-indigo-400 pointer-events-none"></i>
             </div>
@@ -299,7 +300,6 @@
                   <th class="px-5 py-4 w-14 text-center border-b border-slate-200">
                     <input type="checkbox" id="check-all" title="Pilih Semua di Hasil Pencarian Saat Ini" class="w-4 h-4 text-indigo-600 bg-white border-slate-300 rounded focus:ring-indigo-500 focus:ring-2 cursor-pointer transition-colors">
                   </th>
-                  <!-- FITUR BARU: Menampilkan asal file (Toko) -->
                   <th class="px-5 py-4 border-b border-slate-200 bg-slate-50/50 text-center w-32">Toko Target</th>
                   <th class="px-5 py-4 border-b border-slate-200">Nama Produk Target</th>
                   <th class="px-5 py-4 text-center border-b border-slate-200">SKU</th>
@@ -364,7 +364,7 @@
             </div>
             <div class="bg-rose-50 p-5 rounded-2xl shadow-sm border border-rose-100 flex flex-col justify-center relative overflow-hidden">
               <div class="absolute -right-4 -top-4 opacity-10"><i data-lucide="x-circle" class="w-24 h-24 text-rose-500"></i></div>
-              <div class="text-rose-600 text-xs font-bold uppercase tracking-wider mb-1 relative z-10">Dihapus (Tak Dipilih)</div>
+              <div class="text-rose-600 text-xs font-bold uppercase tracking-wider mb-1 relative z-10">Dihapus / Tidak Cocok</div>
               <div class="text-3xl font-black text-rose-700 relative z-10" id="res-missing">0</div>
             </div>
           </div>
@@ -433,9 +433,9 @@
         <div class="bg-indigo-100 p-2 rounded-full mr-3 text-indigo-600">
           <i data-lucide="file-spreadsheet" class="w-6 h-6"></i>
         </div>
-        <h3 class="text-xl font-bold text-slate-800">Simpan File Excel Baru</h3>
+        <h3 class="text-xl font-bold text-slate-800" id="modal-title-text">Simpan File Excel Baru</h3>
       </div>
-      <p class="text-sm text-slate-500 mb-4 leading-relaxed">
+      <p class="text-sm text-slate-500 mb-4 leading-relaxed" id="modal-desc-text">
         Sistem akan mengekstrak file berdasarkan data yang dipilih. <strong class="text-indigo-600">Nilai minus (jika ada) akan otomatis dijadikan 0.</strong> File Anda akan disimpan dengan format nama otomatis:
       </p>
       
@@ -443,7 +443,7 @@
         <div class="relative">
           <input type="text" id="input-filename" class="w-full px-4 py-3 bg-slate-100 border-2 border-slate-200 text-slate-600 font-mono text-sm rounded-xl outline-none cursor-not-allowed" readonly>
         </div>
-        <p class="text-[11px] text-slate-400 mt-2 font-medium">*Nama toko akan otomatis ditambahkan pada saat file diunduh.</p>
+        <p class="text-[11px] text-slate-400 mt-2 font-medium" id="modal-footer-note">*Nama toko akan otomatis ditambahkan pada saat file diunduh.</p>
       </div>
 
       <div class="flex justify-end gap-3">
@@ -588,7 +588,7 @@
         let loadedItems = 0;
         let uniqueMerks = new Set();
         
-        const isHarga = modeUpdate.value === 'harga';
+        const isHarga = modeUpdate.value === 'harga' || modeUpdate.value === 'compare';
         const mSkuIdx = isHarga ? 1 : 0;   
         const mValIdx = isHarga ? 10 : 12; 
         const mNameIdx = 2; 
@@ -827,7 +827,8 @@
 
     // --- Listener Perubahan Mode Update ---
     modeUpdate.addEventListener('change', (e) => {
-      const isHarga = e.target.value === 'harga';
+      const mode = e.target.value;
+      const isHarga = mode === 'harga' || mode === 'compare';
       const masterDesc = document.getElementById('master-desc-text');
 
       if (isHarga) {
@@ -846,7 +847,9 @@
         document.getElementById('text-stock').innerText = "Pilih File Master";
         lucide.createIcons();
         checkReady();
-        alert(`Mode update diubah menjadi ${isHarga ? 'Harga' : 'Stok'}. Silakan unggah ulang file Acuan Master yang sesuai.`);
+        
+        let msg = mode === 'compare' ? 'Compare Harga' : (mode === 'harga' ? 'Harga' : 'Stok');
+        alert(`Mode update diubah menjadi ${msg}. Silakan unggah ulang file Acuan Master yang sesuai.`);
       }
     });
 
@@ -935,7 +938,7 @@
     filterSku.addEventListener('input', (e) => {
       const searchTerm = e.target.value.toLowerCase().trim();
       const selectedMerkFilter = filterMerk.value;
-      const isHarga = modeUpdate.value === 'harga';
+      const isHarga = modeUpdate.value === 'harga' || modeUpdate.value === 'compare';
       
       if (searchTerm.length < 2) {
         skuSuggestionsBox.classList.add('hidden');
@@ -984,7 +987,7 @@
               <div class="text-xs text-slate-500 font-mono"><span class="bg-slate-100 px-1 py-0.5 rounded mr-1">${s.sku}</span> | ${s.merk}</div>
             </div>
             <div class="text-right shrink-0">
-              <div class="text-xs font-medium text-slate-400">${isHarga ? 'Harga' : 'Stok Acuan'}</div>
+              <div class="text-xs font-medium text-slate-400">${isHarga ? 'Harga Master' : 'Stok Acuan'}</div>
               <div class="text-sm font-black text-indigo-600">${isHarga ? new Intl.NumberFormat('id-ID').format(s.price) : s.qty}</div>
             </div>
           </div>
@@ -1042,7 +1045,7 @@
     window.updateCustomValue = function(id, val) {
       const item = currentPreviewData.find(i => i.id === id);
       if(item) {
-        const isHarga = modeUpdate.value === 'harga';
+        const isHarga = modeUpdate.value === 'harga' || modeUpdate.value === 'compare';
         let numericVal = parseInt(val);
         if (!isHarga && !isNaN(numericVal) && numericVal < 0) {
             val = 0; 
@@ -1098,9 +1101,19 @@
       let displayData = [...currentPreviewData];
       
       const isHarga = modeUpdate.value === 'harga';
+      const isCompare = modeUpdate.value === 'compare';
       
-      thValLama.innerText = isHarga ? "Harga Lama" : "Stok Lama";
-      thValBaru.innerText = isHarga ? "Harga Baru" : "Stok Baru";
+      thValLama.innerText = isCompare ? "Harga Marketplace" : (isHarga ? "Harga Lama" : "Stok Lama");
+      thValBaru.innerText = isCompare ? "Harga Master" : (isHarga ? "Harga Baru" : "Stok Baru");
+      
+      const executeBtn = document.getElementById('btn-execute-prompt');
+      if (isCompare) {
+          executeBtn.innerHTML = `<i data-lucide="download" class="w-4 h-4 mr-2"></i> Download Laporan`;
+          executeBtn.className = "w-full md:w-auto px-6 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold rounded-xl shadow-md shadow-blue-200 transition-all duration-200 flex items-center justify-center hover:-translate-y-0.5 active:translate-y-0";
+      } else {
+          executeBtn.innerHTML = `<i data-lucide="save" class="w-4 h-4 mr-2"></i> Eksekusi Update`;
+          executeBtn.className = "w-full md:w-auto px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-bold rounded-xl shadow-md shadow-emerald-200 transition-all duration-200 flex items-center justify-center hover:-translate-y-0.5 active:translate-y-0";
+      }
 
       if (previewSearchText) {
         const lowerSearch = previewSearchText.toLowerCase();
@@ -1148,25 +1161,55 @@
 
       if (paginatedData.length === 0) {
          previewTable.innerHTML = `<tr><td colspan="8" class="px-5 py-8 text-center text-slate-500 font-medium italic">Tidak ada data yang ditampilkan pada filter ini.</td></tr>`;
+         lucide.createIcons();
          return;
       }
 
       paginatedData.forEach(item => {
         let statusHtml = '';
-        if (item.canUpdate) {
-            if(item.isSimilar && item.bundleDivider > 1) {
-                let badgeText = isHarga ? `Paket (x${item.bundleDivider})` : `Paket (÷${item.bundleDivider})`;
-                let titleText = isHarga 
-                    ? `Harga asli ${item.baseQty} dikali ${item.bundleDivider} menjadi ${item.valBaru}` 
-                    : `Stok asli ${item.baseQty} dibagi ${item.bundleDivider} menjadi ${item.valBaru}`;
-                statusHtml = `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-amber-100 text-amber-700 border border-amber-200 shadow-sm cursor-help" title="${titleText}">SKU ${badgeText}</span>`;
-            } else if (item.isSimilar) {
-                statusHtml = `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-amber-100 text-amber-700 border border-amber-200 shadow-sm cursor-help" title="Diambil dari SKU: ${item.matchedBaseSku}">SKU Paket</span>`;
+        let formattedOldVal = item.valLama;
+        let numericOldVal = 0;
+        
+        if (isHarga || isCompare) {
+            if (formattedOldVal !== undefined && formattedOldVal !== '' && !isNaN(parseFloat(String(formattedOldVal).replace(/[^\d]/g, '')))) {
+                numericOldVal = parseFloat(String(formattedOldVal).replace(/[^\d]/g, ''));
+                formattedOldVal = 'Rp ' + new Intl.NumberFormat('id-ID').format(numericOldVal);
             } else {
-                statusHtml = `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 shadow-sm">Ditemukan</span>`;
+                formattedOldVal = '-';
             }
         } else {
-          statusHtml = `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-slate-100 text-slate-500 border border-slate-200 shadow-sm">Tak Terdaftar</span>`;
+            if (formattedOldVal !== undefined && formattedOldVal !== '' && !isNaN(parseFloat(formattedOldVal))) {
+                formattedOldVal = new Intl.NumberFormat('id-ID').format(parseFloat(formattedOldVal));
+            } else {
+                formattedOldVal = '-';
+            }
+        }
+
+        if (isCompare) {
+            let diff = item.valBaru - numericOldVal;
+            
+            if (!item.canUpdate) {
+                statusHtml = `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-slate-100 text-slate-500 border border-slate-200 shadow-sm">Tak Terdaftar</span>`;
+            } else if (diff > 0) {
+                statusHtml = `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-100 text-rose-700 border border-rose-200 shadow-sm">Naik Rp ${new Intl.NumberFormat('id-ID').format(Math.abs(diff))}</span>`;
+            } else if (diff < 0) {
+                statusHtml = `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold bg-blue-100 text-blue-700 border border-blue-200 shadow-sm">Turun Rp ${new Intl.NumberFormat('id-ID').format(Math.abs(diff))}</span>`;
+            } else {
+                statusHtml = `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 shadow-sm">Sesuai</span>`;
+            }
+        } else {
+            if (item.canUpdate) {
+                if(item.isSimilar && item.bundleDivider > 1) {
+                    let badgeText = isHarga ? `Paket (x${item.bundleDivider})` : `Paket (÷${item.bundleDivider})`;
+                    statusHtml = `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-amber-100 text-amber-700 border border-amber-200 shadow-sm cursor-help" title="SKU Paket">SKU ${badgeText}</span>`;
+                } else if (item.isSimilar) {
+                    statusHtml = `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-amber-100 text-amber-700 border border-amber-200 shadow-sm cursor-help" title="Diambil dari SKU: ${item.matchedBaseSku}">SKU Paket</span>`;
+                } else {
+                    statusHtml = `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 shadow-sm">Ditemukan</span>`;
+                }
+            } else {
+              statusHtml = `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-slate-100 text-slate-500 border border-slate-200 shadow-sm">Tak Terdaftar</span>`;
+            }
         }
 
         const isCheckedHtml = item.selected ? 'checked' : '';
@@ -1178,20 +1221,13 @@
         
         if(!item.canUpdate) {
           valueInputHtml = `<span class="text-slate-400 font-bold">-</span>`;
+        } else if (isCompare) {
+          // Compare mode, display as text
+          valueInputHtml = `<span class="font-bold text-slate-700">Rp ${new Intl.NumberFormat('id-ID').format(item.valBaru)}</span>`;
         }
 
         const tr = document.createElement('tr');
         tr.className = `transition-all duration-200 group border-b border-slate-50 ${item.selected ? 'bg-indigo-50/10 hover:bg-indigo-50/40' : 'opacity-50 grayscale-[50%] bg-slate-50'}`;
-        
-        let formattedOldVal = item.valLama;
-        if (isHarga && formattedOldVal !== undefined && formattedOldVal !== '' && !isNaN(parseFloat(String(formattedOldVal).replace(/[^\d]/g, '')))) {
-            let numericOldVal = parseFloat(String(formattedOldVal).replace(/[^\d]/g, ''));
-            formattedOldVal = 'Rp ' + new Intl.NumberFormat('id-ID').format(numericOldVal);
-        } else if (!isHarga && formattedOldVal !== undefined && formattedOldVal !== '' && !isNaN(parseFloat(formattedOldVal))) {
-            formattedOldVal = new Intl.NumberFormat('id-ID').format(parseFloat(formattedOldVal));
-        } else if (formattedOldVal === undefined || formattedOldVal === '') {
-            formattedOldVal = '-';
-        }
         
         let tokoBadgeColor = item.shopName === 'balistationery' ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-purple-100 text-purple-700 border-purple-200';
 
@@ -1206,7 +1242,7 @@
           <td class="px-5 py-4 font-mono text-sm text-center align-top"><span class="bg-white px-2 py-1 rounded text-slate-700 font-semibold border border-slate-200 shadow-sm">${item.sku || '-'}</span></td>
           
           <td class="px-5 py-4 text-right text-slate-400 font-medium align-top pt-5">${formattedOldVal}</td>
-          <td class="px-5 py-4 text-right align-top">${valueInputHtml}</td>
+          <td class="px-5 py-4 text-right align-top pt-5">${valueInputHtml}</td>
           <td class="px-5 py-4 text-center align-top pt-5">${statusHtml}</td>
         `;
         previewTable.appendChild(tr);
@@ -1231,7 +1267,7 @@
       const conf = platformConfig[currentPlatform];
       const selectedMerk = filterMerk.value;
       const selectedKategori = filterKategori.value; 
-      const isUpdateHarga = modeUpdate.value === 'harga'; 
+      const isHarga = modeUpdate.value === 'harga' || modeUpdate.value === 'compare';
       
       const remainingInput = filterSku.value.trim();
       if (remainingInput && !selectedSkusArray.includes(remainingInput)) {
@@ -1269,7 +1305,7 @@
           if (selectedKategori === 'REGULAR' && isPaket) continue;
           if (selectedKategori === 'PAKET' && !isPaket) continue;
           
-          let oldValRaw = row[isUpdateHarga ? conf.hargaIdx : conf.stokIdx];
+          let oldValRaw = row[isHarga ? conf.hargaIdx : conf.stokIdx];
           let oldVal = oldValRaw;
           
           let stockData = null;
@@ -1343,7 +1379,7 @@
           let newVal = '-';
           
           if (canUpdate) {
-              if (isUpdateHarga) {
+              if (isHarga) {
                   baseValue = stockData.price;
                   newVal = Math.round(baseValue * bundleDivider); 
               } else {
@@ -1379,8 +1415,8 @@
       if (foundSimilarSkus && (selectedKategori === 'ALL' || selectedKategori === 'PAKET')) {
           skuWarningArea.classList.remove('hidden');
           const warningText = skuWarningArea.querySelector('p');
-          if(isUpdateHarga) {
-              warningText.innerHTML = `Sistem mendeteksi SKU target yang merupakan variasi/paket dari SKU acuan Anda (contoh: <code class="bg-amber-100 px-1 rounded font-mono text-amber-900">01520-5RIM</code>). <br><strong class="text-amber-900 mt-1 inline-block">✨ Fitur Pintar Aktif:</strong> Karena ini Mode Update <b>Harga</b>, maka Harga master akan otomatis <b>DIKALI</b> dengan angka bundle. Anda dapat memverifikasi hasilnya di tabel bawah.`;
+          if(isHarga) {
+              warningText.innerHTML = `Sistem mendeteksi SKU target yang merupakan variasi/paket dari SKU acuan Anda (contoh: <code class="bg-amber-100 px-1 rounded font-mono text-amber-900">01520-5RIM</code>). <br><strong class="text-amber-900 mt-1 inline-block">✨ Fitur Pintar Aktif:</strong> Karena ini Mode Update/Compare <b>Harga</b>, maka Harga master akan otomatis <b>DIKALI</b> dengan angka bundle. Anda dapat memverifikasi hasilnya di tabel bawah.`;
           } else {
               warningText.innerHTML = `Sistem mendeteksi SKU target yang merupakan variasi/paket dari SKU acuan Anda (contoh: <code class="bg-amber-100 px-1 rounded font-mono text-amber-900">01520-5RIM</code>). <br><strong class="text-amber-900 mt-1 inline-block">✨ Fitur Pintar Aktif:</strong> Karena ini Mode Update <b>Stok</b>, maka Stok master otomatis <b>DIBAGI</b> dengan angka bundle dan dibulatkan.`;
           }
@@ -1418,11 +1454,26 @@
     btnExecutePrompt.addEventListener('click', () => {
       const selectedItems = currentPreviewData.filter(i => i.selected);
       if(selectedItems.length === 0) {
-        alert("Tidak ada data yang dipilih untuk diupdate.");
+        alert("Tidak ada data yang dipilih untuk dieksekusi.");
         return;
       }
       
       const isHarga = modeUpdate.value === 'harga';
+      const isCompare = modeUpdate.value === 'compare';
+      
+      const titleModal = document.getElementById('modal-title-text');
+      const descModal = document.getElementById('modal-desc-text');
+      const footerModal = document.getElementById('modal-footer-note');
+      
+      if (isCompare) {
+          titleModal.innerText = "Download Laporan Perbandingan Harga";
+          descModal.innerHTML = `Sistem akan membuat file <strong>Excel Report</strong> yang berisi perbandingan harga dari data yang dipilih. File ini aman dan tidak akan menimpa file target marketplace.`;
+          footerModal.innerText = "*File akan digabungkan menjadi 1 jika Anda memilih multi-toko.";
+      } else {
+          titleModal.innerText = "Simpan File Excel Baru";
+          descModal.innerHTML = `Sistem akan mengekstrak file berdasarkan data yang dipilih. <strong class="text-indigo-600">Nilai minus (jika ada) akan otomatis dijadikan 0.</strong> File Anda akan disimpan dengan format nama otomatis:`;
+          footerModal.innerText = "*Nama toko akan otomatis ditambahkan pada saat file diunduh.";
+      }
 
       const today = new Date();
       const dd = String(today.getDate()).padStart(2, '0');
@@ -1434,7 +1485,13 @@
       if (selectedMerk === 'ALL') selectedMerk = 'semuamerk';
       const safeMerk = selectedMerk.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '');
 
-      const formatPreview = `${safeMerk}-<toko>-${currentPlatform} [${dateStr}].xlsx`;
+      let formatPreview = "";
+      if (isCompare) {
+          formatPreview = `Laporan_Compare_${safeMerk}_${currentPlatform}_[${dateStr}].xlsx`;
+      } else {
+          const typeName = isHarga ? 'harga' : 'stok';
+          formatPreview = `${safeMerk}-<toko>-${currentPlatform} [${dateStr}].xlsx`;
+      }
       
       inputFilename.value = formatPreview;
       
@@ -1446,7 +1503,8 @@
       try {
         const conf = platformConfig[currentPlatform];
         const isUpdateHarga = modeUpdate.value === 'harga'; 
-        let targetColumnIdx = isUpdateHarga ? conf.hargaIdx : conf.stokIdx; 
+        const isCompare = modeUpdate.value === 'compare'; 
+        let targetColumnIdx = (isUpdateHarga || isCompare) ? conf.hargaIdx : conf.stokIdx; 
         
         let globalUpdatedCount = 0;
         let globalValidRowsTarget = 0;
@@ -1465,13 +1523,70 @@
         const storesToProcess = [];
         if (targetStore1) storesToProcess.push({ key: 1, data: targetStore1 });
         if (targetStore2) storesToProcess.push({ key: 2, data: targetStore2 });
+        
+        // --- LOGIKA EXPORT UNTUK COMPARE HARGA ---
+        if (isCompare) {
+            const reportData = [];
+            for (const storeObj of storesToProcess) {
+                const storeItems = currentPreviewData.filter(item => item.selected && item.storeKey === storeObj.key);
+                globalValidRowsTarget += storeObj.data.totalValidRowsTarget;
+                
+                storeItems.forEach(item => {
+                    let numericOldVal = parseFloat(String(item.valLama).replace(/[^\d]/g, '')) || 0;
+                    let diff = item.valBaru - numericOldVal;
+                    let statusStr = '';
+                    
+                    if(!item.canUpdate) {
+                        statusStr = 'Tidak Ditemukan di Master';
+                    } else if (diff > 0) {
+                        statusStr = `Harus Naik (Rp ${diff})`;
+                    } else if (diff < 0) {
+                        statusStr = `Bisa Turun (Rp ${Math.abs(diff)})`;
+                    } else {
+                        statusStr = 'Harga Sesuai';
+                    }
 
+                    reportData.push({
+                        "Toko Target": item.shopName.toUpperCase(),
+                        "Nama Produk Target": item.namaProduk,
+                        "SKU": item.sku,
+                        "Merk": item.merk,
+                        "Harga Marketplace (Saat Ini)": numericOldVal,
+                        "Harga Master Acuan": item.valBaru,
+                        "Selisih": Math.abs(diff),
+                        "Status / Saran Update": statusStr
+                    });
+                });
+                globalUpdatedCount += storeItems.length;
+            }
+
+            const ws = XLSX.utils.json_to_sheet(reportData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Laporan Compare");
+
+            let safeShop = "multitoko";
+            if(storesToProcess.length === 1) safeShop = storesToProcess[0].data.shop.toLowerCase().replace(/\s+/g, '');
+
+            let finalFileName = `Laporan_Compare_${safeMerk}_${safeShop}_${safePlatform}_[${dateStr}].xlsx`;
+            XLSX.writeFile(wb, finalFileName);
+
+            document.getElementById('res-total').innerText = globalUpdatedCount;
+            document.getElementById('res-updated').innerText = globalUpdatedCount;
+            document.getElementById('res-missing').innerText = globalValidRowsTarget - globalUpdatedCount;
+
+            closeFilenameModal();
+            finalSummary.classList.remove('hidden');
+            setTimeout(() => finalSummary.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200);
+
+            return; // EXIT EARLY
+        }
+
+        // --- LOGIKA EXPORT UNTUK UPDATE BIASA (STOK / HARGA) ---
         for (const storeObj of storesToProcess) {
             const fileData = storeObj.data;
             globalValidRowsTarget += fileData.totalValidRowsTarget;
 
             let freshData;
-            // Jika dari Cloud, buffer ada. Jika dari input file biasa, buffer tidak diset.
             if(fileData.buffer) {
                 freshData = parseBufferAsAoA(fileData.buffer, fileData.sheetName);
             } else {
@@ -1577,8 +1692,6 @@
             range.e.r -= offset; 
             ws['!ref'] = XLSX.utils.encode_range(range);
 
-            // GANTI MEKANISME EKSPOR
-            // Simpan Sheet Target ke Buku Kosong agar 100% hanya 1 Sheet yang di-export
             const singleSheetWorkbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(singleSheetWorkbook, ws, targetSheetName);
 
