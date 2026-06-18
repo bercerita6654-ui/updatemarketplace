@@ -300,6 +300,7 @@
                   <th class="px-5 py-4 w-14 text-center border-b border-slate-200">
                     <input type="checkbox" id="check-all" title="Pilih Semua di Hasil Pencarian Saat Ini" class="w-4 h-4 text-indigo-600 bg-white border-slate-300 rounded focus:ring-indigo-500 focus:ring-2 cursor-pointer transition-colors">
                   </th>
+                  <!-- FITUR BARU: Menampilkan asal file (Toko) -->
                   <th class="px-5 py-4 border-b border-slate-200 bg-slate-50/50 text-center w-32">Toko Target</th>
                   <th class="px-5 py-4 border-b border-slate-200">Nama Produk Target</th>
                   <th class="px-5 py-4 text-center border-b border-slate-200">SKU</th>
@@ -730,7 +731,8 @@
         try {
             // --- 1. Ambil Data Master Acuan ---
             try {
-                const masterUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQx0BFAgsm811XUZuhPfwJ1jKKJir7ErQHsT9VoBbIYb7AqubXL9ANtMHfx3-idHJ20BtdLyg2MRce4/pub?gid=1420343970&single=true&output=csv";
+                // Link baru untuk Master Acuan (Berlaku untuk semua mode)
+                const masterUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTCxz1GPm7QU9IS1yBiSjvIdNTLUsvvplOCyT_R3XH4O-LuVbHoY_bXn1LTH5lpnlolJ29BhUgEdnFm/pub?gid=1564332470&single=true&output=csv";
                 const masterRes = await fetch(masterUrl);
                 if (!masterRes.ok) throw new Error("Gagal mengambil data Acuan Master (Network response was not ok)");
                 const masterBuffer = await masterRes.arrayBuffer();
@@ -741,28 +743,56 @@
             }
 
             // --- 2. Ambil Data Target ---
-            const targetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQx0BFAgsm811XUZuhPfwJ1jKKJir7ErQHsT9VoBbIYb7AqubXL9ANtMHfx3-idHJ20BtdLyg2MRce4/pub?output=xlsx";
-            const targetRes = await fetch(targetUrl);
-            if (!targetRes.ok) throw new Error("Gagal mengambil data Target (Network response was not ok)");
-            const targetBuffer = await targetRes.arrayBuffer();
-
-            const sheet1 = currentPlatform === 'shopee' ? 'Shopee balist' : 'Toped-Balist';
-            const sheet2 = currentPlatform === 'shopee' ? 'Shopee Gomall' : 'Toped-Gomall';
-            
             let loadedCount = 0;
-            
-            try {
-                await processTargetDataBuffer(targetBuffer, `[Cloud] ${sheet1}`, 1, 'balistationery', sheet1);
-                loadedCount++;
-            } catch(e) { console.warn("Gagal load Toko 1:", e); }
-            
-            try {
-                await processTargetDataBuffer(targetBuffer, `[Cloud] ${sheet2}`, 2, 'gomall', sheet2);
-                loadedCount++;
-            } catch(e) { console.warn("Gagal load Toko 2:", e); }
+
+            if (currentPlatform === 'shopee') {
+                // Skema khusus Shopee (Toko 1 & Toko 2 menggunakan CSV spesifik)
+                try {
+                    const target1Url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQUJWBw2EXirlxov14JNpI1h3ulExBcMQxQ5orpGZmpW7cMqUqMkU9E6OxJ4CBLd4ZvAW8tBmhmEEF6/pub?gid=1378584398&single=true&output=csv";
+                    const res1 = await fetch(target1Url);
+                    if (!res1.ok) throw new Error("Gagal mengambil Toko 1");
+                    const buf1 = await res1.arrayBuffer();
+                    await processTargetDataBuffer(buf1, "[Cloud] ShopeeBalist", 1, 'balistationery', null);
+                    loadedCount++;
+                } catch(e) { console.warn("Gagal load Toko 1 Shopee:", e); }
+
+                try {
+                    const target2Url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQUJWBw2EXirlxov14JNpI1h3ulExBcMQxQ5orpGZmpW7cMqUqMkU9E6OxJ4CBLd4ZvAW8tBmhmEEF6/pub?gid=1555986622&single=true&output=csv";
+                    const res2 = await fetch(target2Url);
+                    if (!res2.ok) throw new Error("Gagal mengambil Toko 2");
+                    const buf2 = await res2.arrayBuffer();
+                    await processTargetDataBuffer(buf2, "[Cloud] GomallShopee", 2, 'gomall', null);
+                    loadedCount++;
+                } catch(e) { console.warn("Gagal load Toko 2 Shopee:", e); }
+
+            } else {
+                // Skema Tokopedia (Menggunakan file XLSX gabungan lama seperti sebelumnya)
+                try {
+                    const targetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQx0BFAgsm811XUZuhPfwJ1jKKJir7ErQHsT9VoBbIYb7AqubXL9ANtMHfx3-idHJ20BtdLyg2MRce4/pub?output=xlsx";
+                    const targetRes = await fetch(targetUrl);
+                    if (!targetRes.ok) throw new Error("Gagal mengambil data Target (Network response was not ok)");
+                    const targetBuffer = await targetRes.arrayBuffer();
+
+                    const sheet1 = 'Toped-Balist';
+                    const sheet2 = 'Toped-Gomall';
+                    
+                    try {
+                        await processTargetDataBuffer(targetBuffer, `[Cloud] ${sheet1}`, 1, 'balistationery', sheet1);
+                        loadedCount++;
+                    } catch(e) { console.warn("Gagal load Toko 1 Tokopedia:", e); }
+                    
+                    try {
+                        await processTargetDataBuffer(targetBuffer, `[Cloud] ${sheet2}`, 2, 'gomall', sheet2);
+                        loadedCount++;
+                    } catch(e) { console.warn("Gagal load Toko 2 Tokopedia:", e); }
+
+                } catch(e) {
+                    console.warn("Gagal load file target Tokopedia:", e);
+                }
+            }
             
             if (loadedCount === 0) {
-                alert(`Gagal meload target Toko! Pastikan nama Sheet "${sheet1}" dan "${sheet2}" tersedia di dokumen Google Sheets tersebut.`);
+                alert(`Gagal meload target Toko! Pastikan link tersedia dan sesuai.`);
             }
 
         } catch(e) {
@@ -1201,7 +1231,10 @@
             if (item.canUpdate) {
                 if(item.isSimilar && item.bundleDivider > 1) {
                     let badgeText = isHarga ? `Paket (x${item.bundleDivider})` : `Paket (÷${item.bundleDivider})`;
-                    statusHtml = `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-amber-100 text-amber-700 border border-amber-200 shadow-sm cursor-help" title="SKU Paket">SKU ${badgeText}</span>`;
+                    let titleText = isHarga 
+                        ? `Harga asli ${item.baseQty} dikali ${item.bundleDivider} menjadi ${item.valBaru}` 
+                        : `Stok asli ${item.baseQty} dibagi ${item.bundleDivider} menjadi ${item.valBaru}`;
+                    statusHtml = `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-amber-100 text-amber-700 border border-amber-200 shadow-sm cursor-help" title="${titleText}">SKU ${badgeText}</span>`;
                 } else if (item.isSimilar) {
                     statusHtml = `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-amber-100 text-amber-700 border border-amber-200 shadow-sm cursor-help" title="Diambil dari SKU: ${item.matchedBaseSku}">SKU Paket</span>`;
                 } else {
@@ -1267,7 +1300,7 @@
       const conf = platformConfig[currentPlatform];
       const selectedMerk = filterMerk.value;
       const selectedKategori = filterKategori.value; 
-      const isHarga = modeUpdate.value === 'harga' || modeUpdate.value === 'compare';
+      const isHarga = modeUpdate.value === 'harga' || modeUpdate.value === 'compare'; 
       
       const remainingInput = filterSku.value.trim();
       if (remainingInput && !selectedSkusArray.includes(remainingInput)) {
